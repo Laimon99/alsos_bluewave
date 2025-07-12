@@ -10,13 +10,12 @@ extension _GuidX on Guid {
       value.replaceAll(RegExp(r'[^0-9a-fA-F]'), '').toLowerCase();
 
   bool matches(fbp.Guid uuid) {
-    final other = uuid.str                       // stringa originaria
+    final other = uuid.str // stringa originaria
         .replaceAll(RegExp(r'[^0-9a-fA-F]'), '') // rimuovi trattini
         .toLowerCase();
-    return other.startsWith(_clean);             // ora combacia
+    return other.startsWith(_clean); // ora combacia
   }
 }
-
 
 // ═══════════════════════════════════════════════════════════════════
 //  BleAdapter implementato con flutter_blue_plus
@@ -29,7 +28,8 @@ class BleAdapterFlutter implements BleAdapter {
   //────────────────────────── SCAN ──────────────────────────//
 
   @override
-  Stream<List<BleDevice>> scan({Duration timeout = const Duration(seconds: 5)}) {
+  Stream<List<BleDevice>> scan(
+      {Duration timeout = const Duration(seconds: 5)}) {
     final controller = StreamController<List<BleDevice>>.broadcast();
     final found = <String, BleDevice>{};
 
@@ -69,8 +69,6 @@ class BleAdapterFlutter implements BleAdapter {
     await sub.cancel();
     await controller.close();
   }
-
-  
 
   //──────────────────────── CONNECT ─────────────────────────//
 
@@ -112,23 +110,22 @@ class _BleConnectionFlutter implements BleConnection {
   }
 
   Future<void> enableIndications(Guid uuid) async {
-  final chr = await _findChar(uuid);
-  // Verifica se la caratteristica supporta indications
-  if (!chr.properties.indicate) {
-    throw StateError('Characteristic does not support indications');
+    final chr = await _findChar(uuid);
+    // Verifica se la caratteristica supporta indications
+    if (!chr.properties.indicate) {
+      throw StateError('Characteristic does not support indications');
+    }
+    await chr.setNotifyValue(true);
   }
-  await chr.setNotifyValue(true);
-}
 
-Future<void> disableIndications(Guid uuid) async {
-  final chr = await _findChar(uuid);
-  // Verifica se la caratteristica supporta indications
-  if (!chr.properties.indicate) {
-    throw StateError('Characteristic does not support indications');
+  Future<void> disableIndications(Guid uuid) async {
+    final chr = await _findChar(uuid);
+    // Verifica se la caratteristica supporta indications
+    if (!chr.properties.indicate) {
+      throw StateError('Characteristic does not support indications');
+    }
+    await chr.setNotifyValue(false);
   }
-  await chr.setNotifyValue(false);
-}
-
 
   //────────────── I/O caratteristica ──────────────//
 
@@ -152,14 +149,18 @@ Future<void> disableIndications(Guid uuid) async {
     List<int> value, {
     bool withResponse = true,
   }) async =>
-      (await _findChar(uuid))
-          .write(value, withoutResponse: !withResponse);
+      (await _findChar(uuid)).write(value, withoutResponse: !withResponse);
 
-  @override
   Stream<List<int>> subscribeCharacteristic(Guid uuid) async* {
     final chr = await _findChar(uuid);
+    print('[DEBUG] Subscribing to characteristic ${uuid.value}');
     await chr.setNotifyValue(true);
-    yield* chr.lastValueStream;
+    yield* chr.lastValueStream.map((data) {
+      print('[DEBUG] Received notification (${data.length} bytes): $data');
+      return data;
+    }).handleError((e) {
+      print('[DEBUG] Error in subscription stream: $e');
+    });
   }
 
   @override

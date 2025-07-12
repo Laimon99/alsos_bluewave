@@ -1,7 +1,6 @@
 import 'dart:typed_data';
-import 'packet.dart';
 
-class MissionSetupPacket extends Packet {
+class MissionSetupPacket {
   // Raw fields
   final int start, period, flags, epoch, time, next, stop;
   final int options, checkPeriod, checkTrigger, advRate;
@@ -38,9 +37,6 @@ class MissionSetupPacket extends Packet {
     this.decodedOptions,
   });
 
-  @override
-  PacketType get type => PacketType.missionSetup;
-
   static MissionSetupPacket fromBytes(List<int> bytes) {
     final d = ByteData.sublistView(Uint8List.fromList(bytes));
     return MissionSetupPacket(
@@ -58,7 +54,6 @@ class MissionSetupPacket extends Packet {
     );
   }
 
-  @override
   Uint8List toBytes() {
     final buffer = ByteData(33);
     buffer.setUint32(0, start, Endian.little);
@@ -134,7 +129,6 @@ class MissionSetupPacket extends Packet {
     );
   }
 
-  @override
   String toString() {
     return 'MissionSetupPacket(start=$start, period=$period, stop=$stop, epoch=$epoch, status=$status)';
   }

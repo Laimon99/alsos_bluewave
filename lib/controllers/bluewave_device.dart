@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:alsos_bluewave_core/models/acquisitions.dart';
 import 'package:alsos_bluewave_core/models/mission_config.dart';
 
 import '../ble/ble_adapter.dart';
@@ -160,75 +161,59 @@ class BlueWaveDevice {
     print("Mission STOP sent: $stopPacket");
   }
 
-  Future<List<List<int>>> downloadAcquisitions() async {
-    print("Starting acquisition download...");
+  Future<AcquisitionInfo> downloadAcquisitions() async {
+  print("Starting acquisition download...");
 
-    final logCursorChar = bluewaveLogCursor;
-    final logDataChar = bluewaveLogData;
+  final logs = <List<int>>[];
 
-    final logs = <List<int>>[];
+  // Step 1: Reset cursor
+  await _conn.writeCharacteristic(bluewaveLogCursor, [0, 0, 0, 0, 0, 0]);
 
-    final completer = Completer<void>();
-    Timer? globalTimeout;
+  // Step 2: Subscribe and receive blocks
+  final completer = Completer<void>();
+  final subscription = _conn.subscribeCharacteristic(bluewaveLogData).listen(
+    (data) {
+      if (data.isEmpty) return;
+      if (data.length == 4 && data.every((b) => b == 0xFF)) {
+        completer.complete(); // end-of-data
+        return;
+      }
+      logs.add(data);
+    },
+    onError: (e) => completer.completeError(e),
+  );
 
-    final subscription = _conn.subscribeCharacteristic(logDataChar).listen(
-      (data) {
-        print("Received log block ${data.length} bytes:");
-        final hex =
-            data.map((e) => e.toRadixString(16).padLeft(2, '0')).join(' ');
-        print("DATA HEX: $hex");
+  final timeout = Timer(const Duration(seconds: 30), () {
+    if (!completer.isCompleted) completer.complete(); // fallback timeout
+  });
 
-        // Ignore empty packets
-        if (data.isEmpty) {
-          print("Empty packet skipped");
-          return;
-        }
+  await completer.future;
+  await subscription.cancel();
+  timeout.cancel();
 
-        // Check for EOF
-        if (data.length == 4 && data.every((b) => b == 0xFF)) {
-          print("EOF block received, ending download");
-          if (!completer.isCompleted) completer.complete();
-          return;
-        }
+  // Step 3: Parse blocks
+  final parsed = Acquisitions.parseLogBlocks(logs);
 
-        logs.add(data);
-      },
-      onError: (e) {
-        print("Error during log download: $e");
-        if (!completer.isCompleted) completer.complete();
-      },
-    );
+  // Step 4: Return summary
+  final summary = parsed.samples.map((s) {
+    final time = s.timestamp.toLocal().toIso8601String().substring(11, 19);
+    return "$time - CH0=${s.ch0}, CH1=${s.ch1}";
+  }).toList();
 
-    // Send Log Cursor command (6 bytes all zero)
-    final cursor = <int>[0, 0, 0, 0, 0, 0];
-    await _conn.writeCharacteristic(logCursorChar, cursor);
-    print("Log Cursor set to address 0 with ALL_MEMORY flag");
-
-    // Start global timeout
-    globalTimeout = Timer(const Duration(seconds: 30), () {
-      print("Global timeout reached, ending download");
-      if (!completer.isCompleted) completer.complete();
-    });
-
-    // Wait for EOF or timeout
-    await completer.future;
-
-    // Cleanup
-    await subscription.cancel();
-    globalTimeout.cancel();
-
-    print("Acquisition download completed. Total blocks: ${logs.length}");
-    return logs;
-  }
+  return AcquisitionInfo(
+    summary: summary,
+    status: parsed.recovery.result,
+    frequency: parsed.recovery.frequency,
+    startTime: parsed.recovery.acqFirstTime,
+    recovery: parsed.recovery,
+  );
+}
 
   Future<Map<String, dynamic>> getFriendlyMissionStatus() async {
     final data = await _conn.readCharacteristic(_missionSetupChar);
     final packet = MissionSetupPacket.fromBytes(data);
     return packet.toUserFriendlyMap();
   }
-
-  List<int> _int32le(int v) =>
-      [v & 0xFF, (v >> 8) & 0xFF, (v >> 16) & 0xFF, (v >> 24) & 0xFF];
 
   Future<void> disconnect() => _conn.disconnect();
 }

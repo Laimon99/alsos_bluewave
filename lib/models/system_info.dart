@@ -1,7 +1,6 @@
 import 'dart:typed_data';
-import 'packet.dart';
 
-class SystemInfo implements Packet {
+class SystemInfo {
   final String model;
   final String firmware;
   final DateTime epoch;
@@ -34,7 +33,6 @@ class SystemInfo implements Packet {
     required this.resetCount,
   });
 
-  @override
   List<int> toBytes() => throw UnimplementedError('SystemInfo is read-only');
 
   factory SystemInfo.fromBytes(List<int> bytes) {
@@ -43,10 +41,10 @@ class SystemInfo implements Packet {
     int u16(int o) => d.getUint16(o, Endian.little);
     int u32(int o) => d.getUint32(o, Endian.little);
 
-    String decodeFirmware(int v) =>
+    String _decodeFirmware(int v) =>
         '${(v >> 8).toString().padLeft(2, '0')}.${(v & 0xFF).toString().padLeft(2, '0')}';
 
-    String decodeResetReason(int v) {
+    String _decodeResetReason(int v) {
       if (v & 0x0001 != 0) return 'Power on reset';
       if (v & 0x0002 != 0) return 'Brown-out on AVDD power';
       if (v & 0x0004 != 0) return 'Brown-out on DVDD power';
@@ -74,7 +72,7 @@ class SystemInfo implements Packet {
 
     return SystemInfo(
       model: _decodeModel(modelCode),
-      firmware: decodeFirmware(versionRaw),
+      firmware: _decodeFirmware(versionRaw),
       epoch: DateTime.utc(2000).add(Duration(seconds: epochSec)),
       uptime: Duration(seconds: timeTicks),
       flashSize: u32(12),
@@ -85,7 +83,7 @@ class SystemInfo implements Packet {
       description: descStr,
       batteryTotal: u16(48),
       batteryUsed: u16(50),
-      resetReason: decodeResetReason(u16(52)),
+      resetReason: _decodeResetReason(u16(52)),
       resetCount: u32(56),
     );
   }
@@ -143,7 +141,4 @@ class SystemInfo implements Packet {
         resetCount,
       );
 
-  @override
-  // TODO: implement type
-  PacketType get type => throw UnimplementedError();
 }
