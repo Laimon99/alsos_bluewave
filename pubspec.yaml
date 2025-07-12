@@ -1,0 +1,16 @@
+name: alsos_bluewave_core
+description: Pure-Dart BlueWave protocol & models
+version: 0.1.0
+publish_to: none          # ← repo privato
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  collection: ^1.19.1     # se serve, altrimenti rimuovi
+  flutter_blue_plus: ^1.35.5
+  permission_handler: ^12.0.1
+
+dev_dependencies:
+  test: ^1.26.0
+  lints: ^3.0.0
