@@ -9,7 +9,8 @@
       "dependencies": [
         "collection",
         "flutter_blue_plus",
-        "permission_handler"
+        "permission_handler",
+        "protobuf"
       ],
       "devDependencies": [
         "lints",
@@ -51,6 +52,15 @@
         "web_socket_channel",
         "webkit_inspection_protocol",
         "yaml"
+      ]
+    },
+    {
+      "name": "protobuf",
+      "version": "4.1.0",
+      "dependencies": [
+        "collection",
+        "fixnum",
+        "meta"
       ]
     },
     {
@@ -332,6 +342,16 @@
       ]
     },
     {
+      "name": "meta",
+      "version": "1.16.0",
+      "dependencies": []
+    },
+    {
+      "name": "fixnum",
+      "version": "1.1.1",
+      "dependencies": []
+    },
+    {
       "name": "permission_handler_platform_interface",
       "version": "4.3.0",
       "dependencies": [
@@ -373,11 +393,6 @@
         "flutter",
         "permission_handler_platform_interface"
       ]
-    },
-    {
-      "name": "meta",
-      "version": "1.16.0",
-      "dependencies": []
     },
     {
       "name": "flutter",

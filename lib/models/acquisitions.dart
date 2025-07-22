@@ -1,4 +1,6 @@
 import 'dart:typed_data';
+import 'package:alsos_bluewave_core/models/calibrations.dart';
+import 'package:alsos_bluewave_core/factory_Calibration/factory_calibration.pb.dart';
 
 class RecoveryData {
   final int version;
@@ -52,7 +54,7 @@ class RecoveryData {
     final result = switch (resultRaw) {
       0xFFFFFFFF => "NOT FINISHED",
       0x00000000 => "FINISHED",
-      _ => "ERROR CODE ${resultRaw.toRadixString(16)}",
+      _ => "ERROR CODE \${resultRaw.toRadixString(16)}",
     };
 
     final acqStopRaw = data.getUint32(28, Endian.little);
@@ -86,15 +88,20 @@ class AcquisitionSample {
   final DateTime timestamp;
   final int ch0;
   final int ch1;
+  final double? temperatureC;
+  final double? pressuremBar;
 
   AcquisitionSample({
     required this.timestamp,
     required this.ch0,
     required this.ch1,
+    this.temperatureC,
+    this.pressuremBar,
   });
 
   @override
-  String toString() => '[$timestamp] CH0=$ch0, CH1=$ch1';
+  String toString() =>
+      '[$timestamp] CH0=$ch0, CH1=$ch1, T=\${temperatureC?.toStringAsFixed(2)}°C, P=\${pressuremBar?.toStringAsFixed(2)} mBar';
 }
 
 class ParsedAcquisition {
@@ -108,7 +115,12 @@ class ParsedAcquisition {
 }
 
 class Acquisitions {
-  static ParsedAcquisition parseLogBlocks(List<List<int>> blocks) {
+  static ParsedAcquisition parseLogBlocks(
+    List<List<int>> blocks,
+    dynamic userProto,
+    dynamic factoryProto, {
+    required double reference,
+  }) {
     if (blocks.isEmpty) {
       throw Exception("No data blocks provided");
     }
@@ -126,6 +138,10 @@ class Acquisitions {
 
     int sampleIndex = 0;
 
+    final calibT =
+        BlueWaveTcalib(factoryProto.calibrationCh1, userProto.calibrationCh1);
+    final calibP = BlueWavePcalib(factoryProto.calibrationCh2);
+
     for (int b = 0; b < blocks.length; b++) {
       final block = blocks[b];
 
@@ -136,12 +152,39 @@ class Acquisitions {
       final payload =
           isFirst ? block.sublist(recovery.size + 4) : block.sublist(4);
 
+      print(
+          "🔧 Factory T calib coeffs: ${factoryProto.calibrationCh1.coefficients}");
+      print(
+          "🔧 Factory P calib coeffs: ${factoryProto.calibrationCh2.polyList.map((p) => p.coefficients)}");
+
       for (int i = 0; i + 3 < payload.length; i += 4) {
-        final ch0 = payload[i] | (payload[i + 1] << 8);
-        final ch1 = payload[i + 2] | (payload[i + 3] << 8);
+        final ch0 = payload[i] + (payload[i + 1] << 8); // little-endian
+        final ch1 = payload[i + 2] + (payload[i + 3] << 8); // little-endian
+
+        if (ch0 == 0xFFFF && ch1 == 0xFFFF) {
+          print(
+              "⚠️ Ignorato sample #$sampleIndex → ch0=$ch0, ch1=$ch1 (valori nulli)");
+          sampleIndex++;
+          continue;
+        }
+
         final timestamp = startTime.add(recovery.frequency * sampleIndex);
+        print("✅ Sample #$sampleIndex | ch0=$ch0 | ch1=$ch1");
+
+        final tempC = calibT.user(ch0);
+        final press = calibP.user(ch1, tempC);
+
+        print("🌡️ T = ${tempC.toStringAsFixed(2)} °C");
+        print("🧪 P = ${press.toStringAsFixed(2)} Bar");
+
         allSamples.add(
-          AcquisitionSample(timestamp: timestamp, ch0: ch0, ch1: ch1),
+          AcquisitionSample(
+            timestamp: timestamp,
+            ch0: ch0,
+            ch1: ch1,
+            temperatureC: tempC,
+            pressuremBar: press,
+          ),
         );
         sampleIndex++;
       }
@@ -165,4 +208,17 @@ class AcquisitionInfo {
     this.frequency,
     this.startTime,
   });
+}
+
+List<int>? extractFromRaw(List<int> raw) {
+  if (raw.length < 8) return null;
+
+  final tag = raw[2] + (raw[3] << 8);
+  final length = raw[6] + (raw[7] << 8);
+
+  if (length > 504) return null;
+
+  if (tag != 0xBEBA && tag != 0xFECA) return null;
+
+  return raw.sublist(8, 8 + length);
 }

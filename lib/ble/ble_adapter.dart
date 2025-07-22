@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:alsos_bluewave_core/models/advertising.dart';
+
 class Guid {
   final String value;
   const Guid(this.value);
@@ -13,11 +15,17 @@ class BleDevice {
   final String id;
   final String name;
   final int rssi;
+  final Advertising? advertising;
+  final String? localName;
+  final String? appearance;
 
   BleDevice({
     required this.id,
     required this.name,
     required this.rssi,
+    this.advertising,
+    this.localName,
+    this.appearance,
   });
 }
 

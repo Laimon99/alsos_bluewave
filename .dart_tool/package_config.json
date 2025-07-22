@@ -92,6 +92,12 @@
       "languageVersion": "3.0"
     },
     {
+      "name": "fixnum",
+      "rootUri": "file:///C:/Users/simon/AppData/Local/Pub/Cache/hosted/pub.dev/fixnum-1.1.1",
+      "packageUri": "lib/",
+      "languageVersion": "3.1"
+    },
+    {
       "name": "flutter",
       "rootUri": "file:///C:/flutter/packages/flutter",
       "packageUri": "lib/",
@@ -282,6 +288,12 @@
       "rootUri": "file:///C:/Users/simon/AppData/Local/Pub/Cache/hosted/pub.dev/pool-1.5.1",
       "packageUri": "lib/",
       "languageVersion": "2.12"
+    },
+    {
+      "name": "protobuf",
+      "rootUri": "file:///C:/Users/simon/AppData/Local/Pub/Cache/hosted/pub.dev/protobuf-4.1.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.6"
     },
     {
       "name": "pub_semver",

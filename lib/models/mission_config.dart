@@ -56,6 +56,7 @@ class MissionSetupPacket {
 
   Uint8List toBytes() {
     final buffer = ByteData(33);
+
     buffer.setUint32(0, start, Endian.little);
     buffer.setUint32(4, period, Endian.little);
     buffer.setUint16(8, flags, Endian.little);
@@ -67,7 +68,17 @@ class MissionSetupPacket {
     buffer.setUint16(28, checkPeriod, Endian.little);
     buffer.setUint16(30, checkTrigger, Endian.little);
     buffer.setUint8(32, advRate);
-    return buffer.buffer.asUint8List();
+
+    final bytes = buffer.buffer.asUint8List();
+
+    // Print in debug-friendly hex format
+    print("MissionSetupPacket.toBytes() output:");
+    for (int i = 0; i < bytes.length; i++) {
+      final hex = bytes[i].toRadixString(16).padLeft(2, '0').toUpperCase();
+      print("Byte ${i.toString().padLeft(2)}: 0x$hex");
+    }
+
+    return bytes;
   }
 
   Map<String, dynamic> toUserFriendlyMap() {
@@ -103,21 +114,22 @@ class MissionSetupPacket {
     required Duration delay,
     required Duration frequency,
     required Duration duration,
-    int flags = 0x8400,
-    int options = 0x0011,
-    int checkPeriod = 0,
-    int checkTrigger = 0,
-    int advRate = 0x0A,
+    int? flags,
+    required int options,
+    required int checkPeriod,
+    required int checkTrigger,
+    int? advRate,
   }) {
     final epoch = DateTime.now().millisecondsSinceEpoch ~/ 1000 - 946684800;
     final start = delay.inSeconds;
     final period = frequency.inSeconds;
-    final stop = start + duration.inSeconds;
+    final stop =
+        duration.inSeconds == 0 ? 0xFFFFFFFF : start + duration.inSeconds;
 
     return MissionSetupPacket(
       start: start,
       period: period,
-      flags: flags,
+      flags: flags ?? 0x0000,
       epoch: epoch,
       time: 0,
       next: 0,
@@ -125,7 +137,7 @@ class MissionSetupPacket {
       options: options,
       checkPeriod: checkPeriod,
       checkTrigger: checkTrigger,
-      advRate: advRate,
+      advRate: advRate ?? 0x0A,
     );
   }
 
@@ -141,7 +153,7 @@ class MissionSetupPacket {
 
     if (isMemFull) return 'MEM FULL';
     if (isWaitingTrigger) return 'WAITING TRIGGER';
-    if (isStopped) return 'STOPPED'; // 🟢 priorità assoluta
+    if (isStopped) return 'STOPPED';
     if (isStarted) return 'RUNNING';
 
     return 'IDLE';

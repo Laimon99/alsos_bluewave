@@ -1,12 +1,11 @@
 import 'dart:async';
-
+import 'package:alsos_bluewave_core/factory_Calibration/factory_calibration.pb.dart';
 import 'package:alsos_bluewave_core/models/acquisitions.dart';
 import 'package:alsos_bluewave_core/models/mission_config.dart';
-
 import '../ble/ble_adapter.dart';
 import '../models/system_info.dart';
 import '../uuid/bluewave_uuids.dart';
-import '../models/current_data.dart'; // aggiungi questo import
+import '../models/current_data.dart';
 
 class BlueWaveDevice {
   final BleAdapter _adapter;
@@ -119,12 +118,32 @@ class BlueWaveDevice {
     required Duration delay,
     required Duration frequency,
     required Duration duration,
-    int flags = 0x8400,
-    int options = 0x0011,
+    int? flags,
     int checkPeriod = 0,
-    int checkTrigger = 0,
-    int advRate = 0x0A,
+    required int checkTrigger,
+    int? advRate,
   }) async {
+    // Step 1: Leggi modello
+    final info = await readSystemInfo();
+    final model = info.model.toUpperCase();
+
+    // Step 2: Decidi options
+    int options = 0x0000;
+    final hasT = model.contains('T');
+    final hasP = model.contains('P');
+
+    if (hasT && hasP) {
+      options = 0x00AA; // ✅ CH0_USER + CH1_USER
+    } else if (hasT) {
+      options = 0x0020; // ✅ CH0_USER only
+    } else if (hasP) {
+      options = 0x0080; // ✅ CH1_USER only
+    } else {
+      print(
+          "⚠️ Warning: modello sconosciuto '$model', usando default options = 0x0055");
+      options = 0x0055;
+    }
+
     final packet = MissionSetupPacket.fromUserInput(
       delay: delay,
       frequency: frequency,
@@ -146,15 +165,15 @@ class BlueWaveDevice {
     final stopPacket = MissionSetupPacket(
       start: 0xFFFFFFFF,
       period: 0,
-      flags: 0x4000, // STOPPED
+      flags: 0x0000, // STOPPED
       epoch: epoch,
       time: 0,
       next: 0xFFFFFFFF,
       stop: epoch,
-      options: 0x0011,
+      options: 0x0000,
       checkPeriod: 0,
       checkTrigger: 0,
-      advRate: 0x00,
+      advRate: 0x0A,
     );
 
     await _conn.writeCharacteristic(_missionSetupChar, stopPacket.toBytes());
@@ -162,52 +181,148 @@ class BlueWaveDevice {
   }
 
   Future<AcquisitionInfo> downloadAcquisitions() async {
-  print("Starting acquisition download...");
+    print("Starting acquisition download...");
 
-  final logs = <List<int>>[];
+    final logs = <List<int>>[];
 
-  // Step 1: Reset cursor
-  await _conn.writeCharacteristic(bluewaveLogCursor, [0, 0, 0, 0, 0, 0]);
+    // Step 1: Reset cursor
+    await _conn.writeCharacteristic(bluewaveLogCursor, [0, 0, 0, 0, 0, 0]);
 
-  // Step 2: Subscribe and receive blocks
-  final completer = Completer<void>();
-  final subscription = _conn.subscribeCharacteristic(bluewaveLogData).listen(
-    (data) {
-      if (data.isEmpty) return;
-      if (data.length == 4 && data.every((b) => b == 0xFF)) {
-        completer.complete(); // end-of-data
-        return;
+    // Step 2: Read blocks one-by-one
+    for (int i = 0; i < 10000; i++) {
+      try {
+        final data = await _conn.readCharacteristic(bluewaveLogData);
+
+        if (data.isEmpty) {
+          print("⚠️ Pacchetto vuoto ignorato");
+          continue;
+        }
+
+        if (data.every((b) => b == 0xFF)) {
+          print("✅ Fine dati (pacchetto = solo 0xFF)");
+          break;
+        }
+
+        logs.add(data);
+      } catch (e) {
+        print("❌ Errore durante lettura pacchetto $i: $e");
+        break;
       }
-      logs.add(data);
-    },
-    onError: (e) => completer.completeError(e),
-  );
 
-  final timeout = Timer(const Duration(seconds: 30), () {
-    if (!completer.isCompleted) completer.complete(); // fallback timeout
-  });
+      await Future.delayed(const Duration(milliseconds: 20));
+    }
 
-  await completer.future;
-  await subscription.cancel();
-  timeout.cancel();
+    if (logs.isEmpty) {
+      throw Exception("Nessun dato acquisito: missione vuota o non avviata.");
+    }
 
-  // Step 3: Parse blocks
-  final parsed = Acquisitions.parseLogBlocks(logs);
+    // Step 3: Read and decode factory calibration
+    final factoryRaw =
+        await _conn.readCharacteristic(bluewaveFactoryConfiguration);
+    print("📜 Factory raw (${factoryRaw.length} bytes):");
 
-  // Step 4: Return summary
-  final summary = parsed.samples.map((s) {
-    final time = s.timestamp.toLocal().toIso8601String().substring(11, 19);
-    return "$time - CH0=${s.ch0}, CH1=${s.ch1}";
-  }).toList();
+    final factoryData = extractFromRaw(factoryRaw) ??
+        (throw Exception("⚠️ Factory config non valida (estrazione fallita)"));
 
-  return AcquisitionInfo(
-    summary: summary,
-    status: parsed.recovery.result,
-    frequency: parsed.recovery.frequency,
-    startTime: parsed.recovery.acqFirstTime,
-    recovery: parsed.recovery,
-  );
-}
+    print("📜 Factory data (${factoryData.length} bytes):");
+    print(
+        factoryData.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' '));
+
+    final fallbackFactoryParsers = [
+      factoryConfigurationTP.fromBuffer,
+      factoryConfigurationTT.fromBuffer,
+      factoryConfigurationTH.fromBuffer,
+      factoryConfigurationT.fromBuffer,
+    ];
+
+    double? reference;
+    dynamic factoryProto;
+
+    for (final parser in fallbackFactoryParsers) {
+      try {
+        print("🧪 Tentativo factory con ${parser.runtimeType}");
+        factoryProto = parser(factoryData);
+
+        // Prova a leggere il reference da un campo interno noto
+        final ch1 = (factoryProto as dynamic).calibrationCh1;
+        reference = ch1.reference as double;
+
+        print("✅ Decoding riuscito con ${parser.runtimeType}");
+        print("🏭 Factory reference: $reference");
+        break;
+      } catch (e) {
+        print("❌ ${parser.runtimeType} fallito: $e");
+      }
+    }
+
+    if (reference == null) {
+      throw Exception(
+          "❌ Nessun parser ha decodificato la calibrazione factory.");
+    }
+
+    // Step 4: Parse user calibration
+    final rawFull = await _conn.readCharacteristic(bluewaveUserConfiguration);
+    print("📜 RawFull user config (${rawFull.length} bytes):");
+
+    final calibRaw = extractFromRaw(rawFull) ??
+        (throw Exception(
+            "⚠️ User calibration data non valido (estrazione fallita)"));
+
+    print("📜 Raw user config (${calibRaw.length} bytes):");
+    print(calibRaw.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' '));
+
+    try {
+      final str = String.fromCharCodes(calibRaw);
+      print("🔤 Interpretazione ASCII: $str");
+    } catch (_) {
+      print("🔤 Interpretazione ASCII non riuscita");
+    }
+
+    final fallbackParsers = [
+      userConfigurationTP.fromBuffer,
+      userConfigurationTT.fromBuffer,
+      userConfigurationTH.fromBuffer,
+      userConfigurationT.fromBuffer,
+    ];
+
+    dynamic userProto;
+    for (final parser in fallbackParsers) {
+      try {
+        print("🧪 Tentativo con ${parser.runtimeType}");
+        userProto = parser(calibRaw);
+        print("✅ Decoding riuscito con ${parser.runtimeType}");
+        print(userProto.toProto3Json());
+        break;
+      } catch (e) {
+        print("❌ ${parser.runtimeType} fallito: $e");
+      }
+    }
+
+    if (userProto == null) {
+      throw Exception(
+          "❌ Nessun parser ha decodificato la calibrazione utente.");
+    }
+
+    // Step 5: Parse acquired samples
+    final parsed = Acquisitions.parseLogBlocks(logs, userProto, factoryProto,
+        reference: reference);
+
+    // Step 6: Build summary
+    final summary = parsed.samples.map((s) {
+      final time = s.timestamp.toLocal().toIso8601String().substring(11, 19);
+      final temp = s.temperatureC?.toStringAsFixed(2) ?? '---';
+      final press = s.pressuremBar?.toStringAsFixed(2) ?? '---';
+      return "$time - T=$temp °C, P=$press mBar";
+    }).toList();
+
+    return AcquisitionInfo(
+      summary: summary,
+      status: parsed.recovery.result,
+      frequency: parsed.recovery.frequency,
+      startTime: parsed.recovery.acqFirstTime,
+      recovery: parsed.recovery,
+    );
+  }
 
   Future<Map<String, dynamic>> getFriendlyMissionStatus() async {
     final data = await _conn.readCharacteristic(_missionSetupChar);
