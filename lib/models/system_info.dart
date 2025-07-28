@@ -140,5 +140,10 @@ class SystemInfo {
         resetReason,
         resetCount,
       );
+}
 
+extension SystemInfoUtils on SystemInfo {
+  String get serial => mac;
+
+  String get versionString => firmware;
 }

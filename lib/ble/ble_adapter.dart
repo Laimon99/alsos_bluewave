@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:alsos_bluewave_core/models/advertising.dart';
 
 class Guid {
@@ -50,6 +49,7 @@ abstract class BleAdapter {
     String deviceId, {
     Duration timeout = const Duration(seconds: 20),
   });
+  Future<void> disconnectAll();
 }
 
 class BleAdapterDefault {

@@ -1,6 +1,5 @@
 import 'dart:typed_data';
 import 'package:alsos_bluewave_core/models/calibrations.dart';
-import 'package:alsos_bluewave_core/factory_Calibration/factory_calibration.pb.dart';
 
 class RecoveryData {
   final int version;
@@ -120,6 +119,7 @@ class Acquisitions {
     dynamic userProto,
     dynamic factoryProto, {
     required double reference,
+    required Map<String, dynamic> calibrators,
   }) {
     if (blocks.isEmpty) {
       throw Exception("No data blocks provided");
@@ -138,9 +138,8 @@ class Acquisitions {
 
     int sampleIndex = 0;
 
-    final calibT =
-        BlueWaveTcalib(factoryProto.calibrationCh1, userProto.calibrationCh1);
-    final calibP = BlueWavePcalib(factoryProto.calibrationCh2);
+    final calibT = calibrators['T'] ?? calibrators['T1'];
+    final calibP = calibrators['P'];
 
     for (int b = 0; b < blocks.length; b++) {
       final block = blocks[b];
@@ -151,11 +150,6 @@ class Acquisitions {
       final isFirst = b == 0;
       final payload =
           isFirst ? block.sublist(recovery.size + 4) : block.sublist(4);
-
-      print(
-          "🔧 Factory T calib coeffs: ${factoryProto.calibrationCh1.coefficients}");
-      print(
-          "🔧 Factory P calib coeffs: ${factoryProto.calibrationCh2.polyList.map((p) => p.coefficients)}");
 
       for (int i = 0; i + 3 < payload.length; i += 4) {
         final ch0 = payload[i] + (payload[i + 1] << 8); // little-endian
@@ -171,11 +165,12 @@ class Acquisitions {
         final timestamp = startTime.add(recovery.frequency * sampleIndex);
         print("✅ Sample #$sampleIndex | ch0=$ch0 | ch1=$ch1");
 
-        final tempC = calibT.user(ch0);
-        final press = calibP.user(ch1, tempC);
+        final tempC = calibT != null ? calibT.user(ch0) : null;
+        final press =
+            (calibP != null && tempC != null) ? calibP.user(ch1, tempC) : null;
 
-        print("🌡️ T = ${tempC.toStringAsFixed(2)} °C");
-        print("🧪 P = ${press.toStringAsFixed(2)} Bar");
+        print("🌡️ T = ${tempC?.toStringAsFixed(2) ?? '---'} °C");
+        print("🧪 P = ${press?.toStringAsFixed(2) ?? '---'} Bar");
 
         allSamples.add(
           AcquisitionSample(
@@ -200,6 +195,8 @@ class AcquisitionInfo {
   final Duration? frequency;
   final DateTime? startTime;
   final RecoveryData recovery;
+  final ParsedAcquisition parsed;
+  final dynamic userConfiguration;
 
   AcquisitionInfo({
     required this.summary,
@@ -207,6 +204,8 @@ class AcquisitionInfo {
     this.status,
     this.frequency,
     this.startTime,
+    required this.parsed,
+    required this.userConfiguration,
   });
 }
 

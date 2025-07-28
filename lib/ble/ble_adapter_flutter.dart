@@ -25,6 +25,10 @@ class BleAdapterFlutter implements BleAdapter {
   static final BleAdapterFlutter instance = BleAdapterFlutter._();
   BleAdapterFlutter._();
 
+  final List<BleConnection> _activeConnections = [];
+
+  List<BleConnection> get activeConnections => _activeConnections;
+
   //────────────────────────── SCAN ──────────────────────────//
 
   @override
@@ -78,8 +82,28 @@ class BleAdapterFlutter implements BleAdapter {
     Duration timeout = const Duration(seconds: 20),
   }) async {
     final dev = fbp.BluetoothDevice.fromId(deviceId);
-    await dev.connect(autoConnect: false, timeout: timeout);
-    return _BleConnectionFlutter(dev);
+
+    try {
+      await dev.connect(autoConnect: false, timeout: timeout);
+    } on fbp.FlutterBluePlusException catch (e) {
+      throw Exception(
+          "Errore BLE durante la connessione a $deviceId: ${e.toString()}");
+    } catch (e) {
+      throw Exception("Errore generico durante la connessione a $deviceId: $e");
+    }
+
+    final conn = _BleConnectionFlutter(dev);
+    _activeConnections.add(conn);
+    return conn;
+  }
+
+  Future<void> disconnectAll() async {
+    for (final conn in _activeConnections) {
+      try {
+        await conn.disconnect();
+      } catch (_) {}
+    }
+    _activeConnections.clear();
   }
 
   //────────────────────── PERMISSIONS ──────────────────────//

@@ -75,7 +75,7 @@ class BleScanner {
         // Parse all accumulated data
         final parsed = parseAdvertisingPayload(_advBuffers[id]!);
         final advParsed = parsed.containsKey(0xFF)
-            ? Advertising.fromBytes(parsed[0xFF]!)
+            ? Advertising.fromBytes(id, parsed[0xFF]!)
             : null;
 
         print("FLAGS\n");
@@ -109,6 +109,13 @@ class BleScanner {
     await sub.cancel();
 
     _scanning = false;
+    _ctrl.add(_found.values.toList());
+  }
+
+  Future<void> stopScan() async {
+    if (!_scanning) return;
+    _scanning = false;
+    await FlutterBluePlus.stopScan();
     _ctrl.add(_found.values.toList());
   }
 

@@ -45,8 +45,10 @@ class Advertising {
   final DateTime when;
   final double batteryLevel;
   final Map<String, double> measurements;
+  final String id;
 
   Advertising._({
+    required this.id,
     required this.flags,
     required this.options,
     required this.when,
@@ -54,7 +56,7 @@ class Advertising {
     required this.measurements,
   });
 
-  static Advertising? fromBytes(List<int> bytes) {
+  static Advertising? fromBytes(String id, List<int> bytes) {
     print(
         ">>> ADV RAW BYTES: ${bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}");
 
@@ -102,6 +104,7 @@ class Advertising {
     print(">>> STATUS: $status");
 
     return Advertising._(
+      id: id,
       flags: flags,
       options: options,
       when: when,
@@ -172,11 +175,24 @@ class Advertising {
   static String _prettyLabel(String key) {
     switch (key) {
       case 'CH0_FACTORY':
+      case 'CH0_USER':
         return 'Temperatura';
       case 'CH1_FACTORY':
+      case 'CH1_USER':
         return 'Pressione';
       default:
         return key;
     }
+  }
+
+  String get manufacturer {
+    final parts = id.split(':');
+    if (parts.length < 3) return '(azienda sconosciuta)';
+    final oui = parts.sublist(0, 3).join(':').toLowerCase();
+
+    return switch (oui) {
+      'd0:14:11' => 'Tecnosoft',
+      _ => oui,
+    };
   }
 }

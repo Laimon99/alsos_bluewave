@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:alsos_bluewave_core/factory_Calibration/factory_calibration.pb.dart';
 import 'package:alsos_bluewave_core/models/acquisitions.dart';
+import 'package:alsos_bluewave_core/models/calib_factory.dart';
 import 'package:alsos_bluewave_core/models/mission_config.dart';
 import '../ble/ble_adapter.dart';
 import '../models/system_info.dart';
@@ -118,38 +119,20 @@ class BlueWaveDevice {
     required Duration delay,
     required Duration frequency,
     required Duration duration,
-    int? flags,
+    int flags = 0x8000,
     int checkPeriod = 0,
     required int checkTrigger,
     int? advRate,
+    required bool enableCh0,
+    required bool enableCh1,
   }) async {
-    // Step 1: Leggi modello
-    final info = await readSystemInfo();
-    final model = info.model.toUpperCase();
-
-    // Step 2: Decidi options
-    int options = 0x0000;
-    final hasT = model.contains('T');
-    final hasP = model.contains('P');
-
-    if (hasT && hasP) {
-      options = 0x00AA; // ✅ CH0_USER + CH1_USER
-    } else if (hasT) {
-      options = 0x0020; // ✅ CH0_USER only
-    } else if (hasP) {
-      options = 0x0080; // ✅ CH1_USER only
-    } else {
-      print(
-          "⚠️ Warning: modello sconosciuto '$model', usando default options = 0x0055");
-      options = 0x0055;
-    }
-
     final packet = MissionSetupPacket.fromUserInput(
       delay: delay,
       frequency: frequency,
       duration: duration,
       flags: flags,
-      options: options,
+      enableCh0: enableCh0,
+      enableCh1: enableCh1,
       checkPeriod: checkPeriod,
       checkTrigger: checkTrigger,
       advRate: advRate,
@@ -165,7 +148,7 @@ class BlueWaveDevice {
     final stopPacket = MissionSetupPacket(
       start: 0xFFFFFFFF,
       period: 0,
-      flags: 0x0000, // STOPPED
+      flags: 0x0000,
       epoch: epoch,
       time: 0,
       next: 0xFFFFFFFF,
@@ -243,7 +226,6 @@ class BlueWaveDevice {
         print("🧪 Tentativo factory con ${parser.runtimeType}");
         factoryProto = parser(factoryData);
 
-        // Prova a leggere il reference da un campo interno noto
         final ch1 = (factoryProto as dynamic).calibrationCh1;
         reference = ch1.reference as double;
 
@@ -303,11 +285,19 @@ class BlueWaveDevice {
           "❌ Nessun parser ha decodificato la calibrazione utente.");
     }
 
-    // Step 5: Parse acquired samples
-    final parsed = Acquisitions.parseLogBlocks(logs, userProto, factoryProto,
-        reference: reference);
+    // Step 5: Build calibrators
+    final calibrators = buildBlueWaveCalibrators(factoryProto, userProto);
 
-    // Step 6: Build summary
+    // Step 6: Parse acquired samples
+    final parsed = Acquisitions.parseLogBlocks(
+      logs,
+      userProto,
+      factoryProto,
+      reference: reference,
+      calibrators: calibrators,
+    );
+
+    // Step 7: Build summary
     final summary = parsed.samples.map((s) {
       final time = s.timestamp.toLocal().toIso8601String().substring(11, 19);
       final temp = s.temperatureC?.toStringAsFixed(2) ?? '---';
@@ -321,7 +311,112 @@ class BlueWaveDevice {
       frequency: parsed.recovery.frequency,
       startTime: parsed.recovery.acqFirstTime,
       recovery: parsed.recovery,
+      parsed: parsed,
+      userConfiguration: userProto,
     );
+  }
+
+  Future<Map<String, dynamic>> toMissionBlob() async {
+    final sys = await readSystemInfo();
+    final info = await readDeviceInformation();
+    final acquisition = await downloadAcquisitions();
+
+    final model = info['model'].toString().toUpperCase();
+    final config = acquisition.userConfiguration;
+
+    final sensors = <Map<String, dynamic>>[];
+    if (model.startsWith('TP') ||
+        model.startsWith('TT') ||
+        model.startsWith('T-')) {
+      sensors.add({
+        "brand": "BlueWave",
+        "model": model,
+        "serial": sys.serial.toString(),
+        "certificate": "",
+        "version": sys.versionString,
+        "channel": "0",
+        "description": config.description,
+      });
+    }
+    if (model.startsWith('TP') ||
+        model.startsWith('TT') ||
+        model.startsWith('P-')) {
+      sensors.add({
+        "brand": "BlueWave",
+        "model": model,
+        "serial": sys.serial.toString(),
+        "certificate": "",
+        "version": sys.versionString,
+        "channel": "1",
+        "description": config.description,
+      });
+    }
+
+    final devices = [
+      {
+        "brand": info['manufacturer'],
+        "model": info['model'],
+        "serial": sys.serial.toString(),
+        "certificate": "",
+        "type": "LOGGER",
+        "description": info['hwRev'],
+        "version": sys.versionString,
+        "sensors": sensors,
+      }
+    ];
+
+    final timestamps = <int>[];
+    final measuresMap = <String, Map<String, dynamic>>{};
+
+    for (final sample in acquisition.parsed.samples) {
+      final ts = (sample.timestamp.millisecondsSinceEpoch ~/ 1000) - 946684800;
+      timestamps.add(ts);
+
+      void add(String type, String mode, String unit, num? value) {
+        if (value == null || value.isNaN || value.isInfinite) return;
+        final key = "$type|$mode|$unit";
+        measuresMap.putIfAbsent(
+            key,
+            () => {
+                  "type": type,
+                  "mode": mode,
+                  "unit": unit,
+                  "Values": <num>[],
+                });
+        measuresMap[key]!["Values"].add(value);
+      }
+
+      add("TEMPERATURE", "CALIBRATED", "°C", sample.temperatureC);
+      add("PRESSURE", "CALIBRATED", "mBar", sample.pressuremBar);
+    }
+
+    // Rimuovi i blocchi di misura con solo zeri
+    final filteredMeasures = measuresMap.values.where((m) {
+      final values = m["Values"] as List<num>;
+      return values.any((v) => v != 0);
+    }).toList();
+
+    final measures = <Map<String, dynamic>>[
+      {
+        "type": "TIMESTAMP",
+        "mode": "UTC",
+        "unit": "s",
+        "Values": timestamps,
+      },
+      ...filteredMeasures,
+    ];
+
+    return {
+      //"version": "",
+      //"description": "",
+      //"formatter": {},
+      "devices": devices,
+      "channels": [
+        {
+          "measures": measures,
+        }
+      ],
+    };
   }
 
   Future<Map<String, dynamic>> getFriendlyMissionStatus() async {

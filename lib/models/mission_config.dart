@@ -115,7 +115,8 @@ class MissionSetupPacket {
     required Duration frequency,
     required Duration duration,
     int? flags,
-    required int options,
+    required bool enableCh0,
+    required bool enableCh1,
     required int checkPeriod,
     required int checkTrigger,
     int? advRate,
@@ -125,6 +126,19 @@ class MissionSetupPacket {
     final period = frequency.inSeconds;
     final stop =
         duration.inSeconds == 0 ? 0xFFFFFFFF : start + duration.inSeconds;
+
+    int options = 0x0000;
+
+    if (enableCh0) {
+      options |= 0x0001; // CH0_RAW
+      //options |= 0x0010; // CH0_FACTORY
+      options |= 0x0020; // CH0_USER
+    }
+    if (enableCh1) {
+      options |= 0x0002; // CH1_RAW
+      //options |= 0x0040; // CH1_FACTORY
+      options |= 0x0080; // CH1_USER
+    }
 
     return MissionSetupPacket(
       start: start,
