@@ -1,6 +1,7 @@
 // 📁 lib/models/bluewave_calib_factory.dart
-import 'package:alsos_bluewave_core/models/acquisitions/calibrations.dart';
-import 'package:alsos_bluewave_core/factory_Calibration/factory_calibration.pb.dart';
+
+import 'package:alsos_bluewave/src/factory_calibration/factory_calibration.pb.dart';
+import 'package:alsos_bluewave/src/models/acquisitions/calibrations.dart';
 
 Map<String, dynamic> buildTCalibrators(
   factoryConfigurationT factory,

@@ -1,4 +1,4 @@
-name: alsos_bluewave_core
+name: alsos_bluewave
 description: Pure-Dart BlueWave protocol & models
 version: 0.1.0
 publish_to: none          # ← repo privato

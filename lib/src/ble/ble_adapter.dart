@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'package:alsos_bluewave_core/ble/ble_connection.dart';
-import 'package:alsos_bluewave_core/ble/ble_device.dart';
+import 'package:alsos_bluewave/src/ble/ble_connection.dart';
+import 'package:alsos_bluewave/src/ble/ble_device.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart' as fbp;
 import 'package:permission_handler/permission_handler.dart';
 

@@ -1,5 +1,5 @@
-import 'package:alsos_bluewave_core/models/acquisitions/parsed_acquisitions.dart';
-import 'package:alsos_bluewave_core/models/acquisitions/recovery_data.dart';
+import 'package:alsos_bluewave/src/models/acquisitions/parsed_acquisitions.dart';
+import 'package:alsos_bluewave/src/models/acquisitions/recovery_data.dart';
 
 class AcquisitionInfo {
   final List<String> summary;

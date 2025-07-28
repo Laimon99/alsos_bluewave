@@ -1,4 +1,4 @@
-import 'package:alsos_bluewave_core/factory_Calibration/factory_calibration.pb.dart';
+import 'package:alsos_bluewave/src/factory_calibration/factory_calibration.pb.dart';
 
 
 class BlueWaveTcalib {

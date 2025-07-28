@@ -1,10 +1,10 @@
 {
   "roots": [
-    "alsos_bluewave_core"
+    "alsos_bluewave"
   ],
   "packages": [
     {
-      "name": "alsos_bluewave_core",
+      "name": "alsos_bluewave",
       "version": "0.1.0",
       "dependencies": [
         "collection",

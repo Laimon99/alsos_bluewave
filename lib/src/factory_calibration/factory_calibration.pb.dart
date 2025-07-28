@@ -11,8 +11,7 @@
 // ignore_for_file: non_constant_identifier_names
 
 import 'dart:core' as $core;
-
-import 'package:alsos_bluewave_core/factory_Calibration/factory_configuration.pbenum.dart';
+import 'package:alsos_bluewave/factory_Calibration/factory_configuration.pbenum.dart';
 import 'package:protobuf/protobuf.dart' as $pb;
 
 

@@ -1,6 +1,4 @@
-
-
-import 'package:alsos_bluewave_core/models/guid.dart';
+import 'package:alsos_bluewave/src/models/guid.dart';
 
 
 /// Primary BlueWave custom services

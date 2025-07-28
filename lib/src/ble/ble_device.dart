@@ -1,4 +1,4 @@
-import 'package:alsos_bluewave_core/models/advertising.dart';
+import 'package:alsos_bluewave/src/models/advertising.dart';
 
 /// BLE device wrapper used in scan results.
 class BleDevice {

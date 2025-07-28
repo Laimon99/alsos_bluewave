@@ -1,6 +1,6 @@
 // 📁 lib/models/blob_builder.dart
-import 'package:alsos_bluewave_core/controllers/bluewave_device.dart';
-import 'package:alsos_bluewave_core/models/system_info.dart';
+import 'package:alsos_bluewave/src/models/system_info.dart';
+import 'package:alsos_bluewave/src/controllers/bluewave_device.dart';
 
 /// Utility class to build a Mission BLOB from a connected BlueWaveDevice.
 class MissionBlobBuilder {
