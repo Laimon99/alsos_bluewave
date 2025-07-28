@@ -1,18 +1,27 @@
 import 'dart:async';
+import 'package:alsos_bluewave_core/ble/ble_adapter.dart';
+import 'package:alsos_bluewave_core/ble/ble_connection.dart';
 import 'package:alsos_bluewave_core/factory_Calibration/factory_calibration.pb.dart';
-import 'package:alsos_bluewave_core/models/acquisitions.dart';
-import 'package:alsos_bluewave_core/models/calib_factory.dart';
+import 'package:alsos_bluewave_core/models/acquisitions/acquisitions.dart';
+import 'package:alsos_bluewave_core/models/acquisitions/acquisitions_info.dart';
+//import 'package:alsos_bluewave_core/models/acquisitions/acquisitions_info.dart';
+import 'package:alsos_bluewave_core/models/acquisitions/calib_factory.dart';
+import 'package:alsos_bluewave_core/models/guid.dart';
+import 'package:alsos_bluewave_core/models/mission_blob.dart';
 import 'package:alsos_bluewave_core/models/mission_config.dart';
-import '../ble/ble_adapter.dart';
+import 'package:alsos_bluewave_core/utils/extract_from_raw.dart';
+import 'package:alsos_bluewave_core/utils/get_discovery.dart';
+import 'package:alsos_bluewave_core/uuid/uuids.dart';
 import '../models/system_info.dart';
-import '../uuid/bluewave_uuids.dart';
 import '../models/current_data.dart';
 
+/// High-level controller for interacting with a BlueWave BLE device.
+/// Handles GATT discovery, mission management, data download and parsing.
 class BlueWaveDevice {
   final BleAdapter _adapter;
   final String id;
 
-  late BleConnection _conn;
+  late final BleConnection _conn;
   late Guid _sysInfoChar;
   late Guid _charManufacturer, _charModel, _charHwRev;
   late Guid _missionSetupChar;
@@ -20,87 +29,46 @@ class BlueWaveDevice {
 
   BlueWaveDevice._internal(this._adapter, this.id);
 
-  static Future<BlueWaveDevice> call(BleAdapter adapter, String id) async {
+  /// Factory method to create and connect a new BlueWaveDevice.
+  static Future<BlueWaveDevice> connectVia(
+      BleAdapter adapter, String id) async {
     final device = BlueWaveDevice._internal(adapter, id);
-    await device.connect();
+    await device._connect();
     return device;
   }
 
-  /*──────────────── connect ────────────────*/
-  Future<void> connect() async {
+  /// Establish connection and resolve required GATT characteristics.
+  Future<void> _connect() async {
     try {
       _conn = await _adapter.connect(id);
-      await _resolveGatt();
+      await resolveGattCharacteristics(_conn, assign: (uuidMap) {
+        _sysInfoChar = uuidMap['sysInfo']!;
+        _charManufacturer = uuidMap['manufacturer']!;
+        _charModel = uuidMap['model']!;
+        _charHwRev = uuidMap['hwRev']!;
+        _missionSetupChar = uuidMap['mission']!;
+        _currentDataChar = uuidMap['current']!;
+      });
     } catch (e) {
       print("Connection failed: $e");
-      rethrow; // opzionale: rilancia per gestione a livello superiore
+      rethrow;
     }
   }
 
-  BleConnection get connection => _conn;
+  /// Disconnects the device.
+  Future<void> disconnect() => _conn.disconnect();
 
-  /*──────────────── GATT discovery ─────────*/
-  Future<void> _resolveGatt() async {
-    final svcs = await _conn.services();
-
-    Guid? findByExact(String uuid, {String? svcUuid}) {
-      String extractShort(String u) {
-        u = u.toLowerCase().replaceAll('-', '');
-        if (u.length == 32 && u.startsWith('0000')) {
-          return u.substring(4, 8);
-        }
-        return u;
-      }
-
-      final target = extractShort(uuid);
-      final targetSvc = svcUuid != null ? extractShort(svcUuid) : null;
-
-      for (final s in svcs) {
-        final sidRaw = (s as dynamic).uuid.toString();
-        final sid = extractShort(sidRaw);
-        if (targetSvc != null && sid != targetSvc) continue;
-
-        for (final c in (s as dynamic).characteristics as List<dynamic>) {
-          final cidRaw = (c as dynamic).uuid.toString();
-          final cid = extractShort(cidRaw);
-          if (cid == target) return Guid(cidRaw);
-        }
-      }
-      return null;
-    }
-
-    _sysInfoChar = findByExact(bluewaveSystemInfo.value) ??
-        (throw StateError('System-Info characteristic not found'));
-
-    _charManufacturer = findByExact(deviceManufacturerChar.value,
-            svcUuid: deviceInfoService.value) ??
-        (throw StateError('Manufacturer characteristic not found'));
-
-    _charModel =
-        findByExact(deviceModelChar.value, svcUuid: deviceInfoService.value) ??
-            (throw StateError('Model characteristic not found'));
-
-    _charHwRev =
-        findByExact(deviceHwRevChar.value, svcUuid: deviceInfoService.value) ??
-            (throw StateError('Hardware Revision characteristic not found'));
-
-    _missionSetupChar = findByExact(bluewaveMissionSetup.value) ??
-        (throw StateError('Mission Setup characteristic not found'));
-
-    _currentDataChar = findByExact(bluewaveCurrentData.value) ??
-        (throw StateError('Current Data characteristic not found'));
+  /// Reads system metadata.
+  Future<SystemInfo> readSystemInfo() async {
+    final data = await _conn.read(_sysInfoChar);
+    return SystemInfo.fromBytes(data);
   }
 
-  /*──────────────── API ─────────────────────*/
-
-  Future<SystemInfo> readSystemInfo() async =>
-      SystemInfo.fromBytes(await _conn.readCharacteristic(_sysInfoChar));
-
+  /// Reads manufacturer, model and hardware revision.
   Future<Map<String, String>> readDeviceInformation() async {
-    final manufacturer = await _conn.readCharacteristic(_charManufacturer);
-    final model = await _conn.readCharacteristic(_charModel);
-    final hwRev = await _conn.readCharacteristic(_charHwRev);
-
+    final manufacturer = await _conn.read(_charManufacturer);
+    final model = await _conn.read(_charModel);
+    final hwRev = await _conn.read(_charHwRev);
     return {
       'manufacturer': String.fromCharCodes(manufacturer),
       'model': String.fromCharCodes(model),
@@ -108,13 +76,13 @@ class BlueWaveDevice {
     };
   }
 
-  /// Legge i dati correnti dal dispositivo e li converte in valori reali
+  /// Reads current measurement values from the device.
   Future<CurrentData> readCurrentData() async {
-    final raw = await _conn.readCharacteristic(_currentDataChar);
+    final raw = await _conn.read(_currentDataChar);
     return CurrentData.fromBytes(raw);
   }
 
-  /// Starts a mission with fully customizable parameters.
+  /// Starts a logging mission on the device.
   Future<void> startMission({
     required Duration delay,
     required Duration frequency,
@@ -137,29 +105,27 @@ class BlueWaveDevice {
       checkTrigger: checkTrigger,
       advRate: advRate,
     );
-
-    await _conn.writeCharacteristic(_missionSetupChar, packet.toBytes());
+    await _conn.write(_missionSetupChar, packet.toBytes());
     print("Mission START sent: $packet");
   }
 
+  /// Stops the current mission.
   Future<void> stopMission() async {
     final epoch = DateTime.now().millisecondsSinceEpoch ~/ 1000 - 946684800;
-
     final stopPacket = MissionSetupPacket(
       start: 0xFFFFFFFF,
       period: 0,
-      flags: 0x0000,
+      flags: 0,
       epoch: epoch,
       time: 0,
       next: 0xFFFFFFFF,
       stop: epoch,
-      options: 0x0000,
+      options: 0,
       checkPeriod: 0,
       checkTrigger: 0,
       advRate: 0x0A,
     );
-
-    await _conn.writeCharacteristic(_missionSetupChar, stopPacket.toBytes());
+    await _conn.write(_missionSetupChar, stopPacket.toBytes());
     print("Mission STOP sent: $stopPacket");
   }
 
@@ -169,12 +135,12 @@ class BlueWaveDevice {
     final logs = <List<int>>[];
 
     // Step 1: Reset cursor
-    await _conn.writeCharacteristic(bluewaveLogCursor, [0, 0, 0, 0, 0, 0]);
+    await _conn.write(bluewaveLogCursor, [0, 0, 0, 0, 0, 0]);
 
     // Step 2: Read blocks one-by-one
     for (int i = 0; i < 10000; i++) {
       try {
-        final data = await _conn.readCharacteristic(bluewaveLogData);
+        final data = await _conn.read(bluewaveLogData);
 
         if (data.isEmpty) {
           print("⚠️ Pacchetto vuoto ignorato");
@@ -201,7 +167,7 @@ class BlueWaveDevice {
 
     // Step 3: Read and decode factory calibration
     final factoryRaw =
-        await _conn.readCharacteristic(bluewaveFactoryConfiguration);
+        await _conn.read(bluewaveFactoryConfiguration);
     print("📜 Factory raw (${factoryRaw.length} bytes):");
 
     final factoryData = extractFromRaw(factoryRaw) ??
@@ -243,7 +209,7 @@ class BlueWaveDevice {
     }
 
     // Step 4: Parse user calibration
-    final rawFull = await _conn.readCharacteristic(bluewaveUserConfiguration);
+    final rawFull = await _conn.read(bluewaveUserConfiguration);
     print("📜 RawFull user config (${rawFull.length} bytes):");
 
     final calibRaw = extractFromRaw(rawFull) ??
@@ -316,114 +282,7 @@ class BlueWaveDevice {
     );
   }
 
-  Future<Map<String, dynamic>> toMissionBlob() async {
-    final sys = await readSystemInfo();
-    final info = await readDeviceInformation();
-    final acquisition = await downloadAcquisitions();
-
-    final model = info['model'].toString().toUpperCase();
-    final config = acquisition.userConfiguration;
-
-    final sensors = <Map<String, dynamic>>[];
-    if (model.startsWith('TP') ||
-        model.startsWith('TT') ||
-        model.startsWith('T-')) {
-      sensors.add({
-        "brand": "BlueWave",
-        "model": model,
-        "serial": sys.serial.toString(),
-        "certificate": "",
-        "version": sys.versionString,
-        "channel": "0",
-        "description": config.description,
-      });
-    }
-    if (model.startsWith('TP') ||
-        model.startsWith('TT') ||
-        model.startsWith('P-')) {
-      sensors.add({
-        "brand": "BlueWave",
-        "model": model,
-        "serial": sys.serial.toString(),
-        "certificate": "",
-        "version": sys.versionString,
-        "channel": "1",
-        "description": config.description,
-      });
-    }
-
-    final devices = [
-      {
-        "brand": info['manufacturer'],
-        "model": info['model'],
-        "serial": sys.serial.toString(),
-        "certificate": "",
-        "type": "LOGGER",
-        "description": info['hwRev'],
-        "version": sys.versionString,
-        "sensors": sensors,
-      }
-    ];
-
-    final timestamps = <int>[];
-    final measuresMap = <String, Map<String, dynamic>>{};
-
-    for (final sample in acquisition.parsed.samples) {
-      final ts = (sample.timestamp.millisecondsSinceEpoch ~/ 1000) - 946684800;
-      timestamps.add(ts);
-
-      void add(String type, String mode, String unit, num? value) {
-        if (value == null || value.isNaN || value.isInfinite) return;
-        final key = "$type|$mode|$unit";
-        measuresMap.putIfAbsent(
-            key,
-            () => {
-                  "type": type,
-                  "mode": mode,
-                  "unit": unit,
-                  "Values": <num>[],
-                });
-        measuresMap[key]!["Values"].add(value);
-      }
-
-      add("TEMPERATURE", "CALIBRATED", "°C", sample.temperatureC);
-      add("PRESSURE", "CALIBRATED", "mBar", sample.pressuremBar);
-    }
-
-    // Rimuovi i blocchi di misura con solo zeri
-    final filteredMeasures = measuresMap.values.where((m) {
-      final values = m["Values"] as List<num>;
-      return values.any((v) => v != 0);
-    }).toList();
-
-    final measures = <Map<String, dynamic>>[
-      {
-        "type": "TIMESTAMP",
-        "mode": "UTC",
-        "unit": "s",
-        "Values": timestamps,
-      },
-      ...filteredMeasures,
-    ];
-
-    return {
-      //"version": "",
-      //"description": "",
-      //"formatter": {},
-      "devices": devices,
-      "channels": [
-        {
-          "measures": measures,
-        }
-      ],
-    };
+  Future<Map<String, dynamic>> toMissionBlob() {
+    return MissionBlobBuilder(this).build();
   }
-
-  Future<Map<String, dynamic>> getFriendlyMissionStatus() async {
-    final data = await _conn.readCharacteristic(_missionSetupChar);
-    final packet = MissionSetupPacket.fromBytes(data);
-    return packet.toUserFriendlyMap();
-  }
-
-  Future<void> disconnect() => _conn.disconnect();
 }

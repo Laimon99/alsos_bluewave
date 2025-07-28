@@ -1,16 +1,12 @@
-// lib/alsos_bluewave.dart
-library alsos_bluewave;
+library alsos_bluewave_core;
 
-// BLE abstraction
 export 'ble/ble_adapter.dart';
-export 'ble/ble_adapter_flutter.dart';
 export 'ble/ble_scanner.dart';
+export 'ble/ble_device.dart';
 
-// High-level device controller
 export 'controllers/bluewave_device.dart';
-
-// Data models
-export 'models/system_info.dart';
 export 'models/mission_config.dart';
-
-export 'uuid/bluewave_uuids.dart';
+export 'models/system_info.dart';
+export 'models/current_data.dart';
+export 'models/acquisitions/acquisitions.dart';
+export 'models/mission_blob.dart';

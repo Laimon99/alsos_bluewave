@@ -1,5 +1,8 @@
+// system_info.dart
+
 import 'dart:typed_data';
 
+/// Parsed representation of system metadata returned by the BlueWave device.
 class SystemInfo {
   final String model;
   final String firmware;
@@ -11,9 +14,9 @@ class SystemInfo {
   final int batteryMv;
   final String mac;
   final String description;
-  final int batteryTotal; // Coulomb
-  final int batteryUsed; // Coulomb
-  final String resetReason; // Human readable reset reason
+  final int batteryTotal; // In Coulombs
+  final int batteryUsed;  // In Coulombs
+  final String resetReason; // Human-readable reset reason
   final int resetCount;
 
   const SystemInfo({
@@ -33,12 +36,15 @@ class SystemInfo {
     required this.resetCount,
   });
 
-  List<int> toBytes() => throw UnimplementedError('SystemInfo is read-only');
+  String get serial => mac;
+  String get versionString => firmware;
+  String get deviceModel => model;
 
+  /// Parses raw bytes received from the device into a SystemInfo object.
   factory SystemInfo.fromBytes(List<int> bytes) {
     final d = ByteData.sublistView(Uint8List.fromList(bytes));
 
-    int u16(int o) => d.getUint16(o, Endian.little);
+    int u16(int o) => d.getUint16(o, Endian.little);  
     int u32(int o) => d.getUint32(o, Endian.little);
 
     String _decodeFirmware(int v) =>
@@ -88,6 +94,7 @@ class SystemInfo {
     );
   }
 
+  /// Decodes the model code into a human-readable string.
   static String _decodeModel(int code) {
     switch (code & 0xFF) {
       case 0x0A:
@@ -142,8 +149,3 @@ class SystemInfo {
       );
 }
 
-extension SystemInfoUtils on SystemInfo {
-  String get serial => mac;
-
-  String get versionString => firmware;
-}

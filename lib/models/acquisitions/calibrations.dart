@@ -116,4 +116,3 @@ class BlueWavePcalib {
     return factory(raw, t);
   }
 }
-

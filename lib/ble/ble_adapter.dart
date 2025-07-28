@@ -1,57 +1,85 @@
 import 'dart:async';
-import 'package:alsos_bluewave_core/models/advertising.dart';
+import 'package:alsos_bluewave_core/ble/ble_connection.dart';
+import 'package:alsos_bluewave_core/ble/ble_device.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart' as fbp;
+import 'package:permission_handler/permission_handler.dart';
 
-class Guid {
-  final String value;
-  const Guid(this.value);
-  int? get short =>
-      value.length >= 8 ? int.tryParse(value.substring(4, 8), radix: 16) : null;
-  @override
-  String toString() => value;
-}
+/// BLE adapter for scanning and connecting to devices.
+class BleAdapter {
+  static final BleAdapter instance = BleAdapter._();
+  BleAdapter._();
 
-class BleDevice {
-  final String id;
-  final String name;
-  final int rssi;
-  final Advertising? advertising;
-  final String? localName;
-  final String? appearance;
+  final List<BleConnection> _connections = [];
 
-  BleDevice({
-    required this.id,
-    required this.name,
-    required this.rssi,
-    this.advertising,
-    this.localName,
-    this.appearance,
-  });
-}
+  /// Scan for nearby BLE devices.
+  Stream<List<BleDevice>> scan({Duration timeout = const Duration(seconds: 5)}) {
+    final controller = StreamController<List<BleDevice>>.broadcast();
+    final found = <String, BleDevice>{};
+    _startScan(controller, found, timeout);
+    return controller.stream;
+  }
 
-abstract class BleConnection {
-  Future<void> disconnect();
-  Future<List<Object>> services();
-  Future<List<int>> readCharacteristic(Guid charUuid);
-  Future<void> writeCharacteristic(Guid charUuid, List<int> value,
-      {bool withResponse = true});
-  Stream<List<int>> subscribeCharacteristic(Guid charUuid);
-  Future<void> enableIndications(
-    Guid charUuid,
-  );
-  Future<void> disableIndications(
-    Guid charUuid,
-  );
-}
+  Future<void> _startScan(
+    StreamController<List<BleDevice>> controller,
+    Map<String, BleDevice> found,
+    Duration timeout,
+  ) async {
+    if (!await _checkPermissions()) {
+      controller.addError('BLE permissions denied');
+      await controller.close();
+      return;
+    }
 
-abstract class BleAdapter {
-  Stream<List<BleDevice>> scan({Duration timeout = const Duration(seconds: 5)});
-  Future<BleConnection> connect(
-    String deviceId, {
-    Duration timeout = const Duration(seconds: 20),
-  });
-  Future<void> disconnectAll();
-}
+    await fbp.FlutterBluePlus.startScan(timeout: timeout);
+    final sub = fbp.FlutterBluePlus.scanResults.listen((batch) {
+      for (final r in batch) {
+        final id = r.device.remoteId.str;
+        if (found.containsKey(id)) continue;
 
-class BleAdapterDefault {
-  static late BleAdapter instance;
+        found[id] = BleDevice(
+          id: id,
+          name: r.device.platformName,
+          rssi: r.rssi,
+        );
+        controller.add(found.values.toList(growable: false));
+      }
+    });
+
+    await Future.delayed(timeout);
+    await fbp.FlutterBluePlus.stopScan();
+    await sub.cancel();
+    await controller.close();
+  }
+
+  /// Connect to device by ID.
+  Future<BleConnection> connect(String deviceId, {Duration timeout = const Duration(seconds: 20)}) async {
+    final dev = fbp.BluetoothDevice.fromId(deviceId);
+    try {
+      await dev.connect(autoConnect: false, timeout: timeout);
+    } catch (e) {
+      throw Exception('Connection error with $deviceId: $e');
+    }
+    final conn = BleConnection(dev);
+    _connections.add(conn);
+    return conn;
+  }
+
+  /// Disconnect all active connections.
+  Future<void> disconnectAll() async {
+    for (final conn in _connections) {
+      try {
+        await conn.disconnect();
+      } catch (_) {}
+    }
+    _connections.clear();
+  }
+
+  Future<bool> _checkPermissions() async {
+    final statuses = await [
+      Permission.bluetoothScan,
+      Permission.bluetoothConnect,
+      Permission.locationWhenInUse,
+    ].request();
+    return statuses.values.every((s) => s.isGranted);
+  }
 }

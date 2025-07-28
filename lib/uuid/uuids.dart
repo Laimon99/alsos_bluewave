@@ -1,6 +1,7 @@
-// lib/uuid/bluewave_uuids.dart
 
-import '../ble/ble_adapter.dart';
+
+import 'package:alsos_bluewave_core/models/guid.dart';
+
 
 /// Primary BlueWave custom services
 const Guid bluewaveService1 = Guid('4f460001-6357-4391-af80-a7adcca8026d');
