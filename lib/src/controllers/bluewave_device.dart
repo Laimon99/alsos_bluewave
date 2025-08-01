@@ -17,7 +17,6 @@ import '../models/current_data.dart';
 /// High-level controller for interacting with a BlueWave BLE device.
 /// Handles GATT discovery, mission management, data download and parsing.
 class BlueWaveDevice {
-  final BleAdapter _adapter;
   final String id;
 
   late final BleConnection _conn;
@@ -26,32 +25,33 @@ class BlueWaveDevice {
   late Guid _missionSetupChar;
   late Guid _currentDataChar;
 
-  BlueWaveDevice._internal(this._adapter, this.id);
+  BlueWaveDevice._internal(this.id);
 
-  /// Factory method to create and connect a new BlueWaveDevice.
-  static Future<BlueWaveDevice> connectVia(
-      BleAdapter adapter, String id) async {
-    final device = BlueWaveDevice._internal(adapter, id);
-    await device._connect();
-    return device;
-  }
+  /// Connects to a BlueWave device using the provided BleAdapter and device ID.
+  /// This method creates a new instance and establishes a GATT connection,
+  /// resolving the required characteristics.
+  static Future<BlueWaveDevice> connect(BleAdapter adapter, String id) async {
+    final device = BlueWaveDevice._internal(id);
 
-  /// Establish connection and resolve required GATT characteristics.
-  Future<void> _connect() async {
     try {
-      _conn = await _adapter.connect(id);
-      await resolveGattCharacteristics(_conn, assign: (uuidMap) {
-        _sysInfoChar = uuidMap['sysInfo']!;
-        _charManufacturer = uuidMap['manufacturer']!;
-        _charModel = uuidMap['model']!;
-        _charHwRev = uuidMap['hwRev']!;
-        _missionSetupChar = uuidMap['mission']!;
-        _currentDataChar = uuidMap['current']!;
+      // Establish BLE connection
+      device._conn = await adapter.connect(id);
+
+      // Resolve characteristics and assign them to internal fields
+      await resolveGattCharacteristics(device._conn, assign: (uuidMap) {
+        device._sysInfoChar = uuidMap['sysInfo']!;
+        device._charManufacturer = uuidMap['manufacturer']!;
+        device._charModel = uuidMap['model']!;
+        device._charHwRev = uuidMap['hwRev']!;
+        device._missionSetupChar = uuidMap['mission']!;
+        device._currentDataChar = uuidMap['current']!;
       });
     } catch (e) {
       print("Connection failed: $e");
       rethrow;
     }
+
+    return device;
   }
 
   /// Disconnects the device.
@@ -165,8 +165,7 @@ class BlueWaveDevice {
     }
 
     // Step 3: Read and decode factory calibration
-    final factoryRaw =
-        await _conn.read(bluewaveFactoryConfiguration);
+    final factoryRaw = await _conn.read(bluewaveFactoryConfiguration);
     print("📜 Factory raw (${factoryRaw.length} bytes):");
 
     final factoryData = extractFromRaw(factoryRaw) ??
@@ -284,4 +283,6 @@ class BlueWaveDevice {
   Future<Map<String, dynamic>> toMissionBlob() {
     return MissionBlobBuilder(this).build();
   }
+
+  //-----------------------------------------------------------------------------------------------------------------------------//
 }
