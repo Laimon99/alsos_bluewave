@@ -12,7 +12,8 @@ class BleAdapter {
   final List<BleConnection> _connections = [];
 
   /// Scan for nearby BLE devices.
-  Stream<List<BleDevice>> scan({Duration timeout = const Duration(seconds: 5)}) {
+  Stream<List<BleDevice>> scan(
+      {Duration timeout = const Duration(seconds: 5)}) {
     final controller = StreamController<List<BleDevice>>.broadcast();
     final found = <String, BleDevice>{};
     _startScan(controller, found, timeout);
@@ -52,7 +53,8 @@ class BleAdapter {
   }
 
   /// Connect to device by ID.
-  Future<BleConnection> connect(String deviceId, {Duration timeout = const Duration(seconds: 20)}) async {
+  Future<BleConnection> connect(String deviceId,
+      {Duration timeout = const Duration(seconds: 20)}) async {
     final dev = fbp.BluetoothDevice.fromId(deviceId);
     try {
       await dev.connect(autoConnect: false, timeout: timeout);
@@ -66,7 +68,7 @@ class BleAdapter {
 
   /// Disconnect all active connections.
   Future<void> disconnectAll() async {
-    for (final conn in _connections) {
+    for (final conn in List.of(_connections)) {
       try {
         await conn.disconnect();
       } catch (_) {}
