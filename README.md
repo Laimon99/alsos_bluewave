@@ -224,9 +224,3 @@ For protocol details (UUIDs, packet formats, mission structure), refer to Tecnos
 * [flutter\_blue\_plus](https://pub.dev/packages/flutter_blue_plus)
 * [permission\_handler](https://pub.dev/packages/permission_handler)
 * [Main Alsos repository](https://github.com/tecnosoft/alsos)
-
----
-
-## 🌐 License
-
-External dependencies are released under BSD‑3–Clause and MIT licenses.
