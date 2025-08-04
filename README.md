@@ -49,6 +49,27 @@ This library is designed to be included as a **Git submodule** in the main `also
 
 ---
 
+## 🧩 Dependencies & Licenses
+
+This library relies on the following dependencies:
+
+```yaml
+dependencies:
+  collection: ^1.19.1
+  flutter_blue_plus: ^1.35.5
+  permission_handler: ^12.0.1
+```
+
+| Package              | License                                                                            | Commercial Use |
+| -------------------- | ---------------------------------------------------------------------------------- | -------------- |
+| `collection`         | BSD‑3‑Clause                                                                       | ✅ Allowed      |
+| `flutter_blue_plus`  | BSD‑3‑Clause ([RPMGlobal][1], [Stack Overflow][2], [Gitee][3], [Dart packages][4]) | ✅ Allowed      |
+| `permission_handler` | MIT                                                                                | ✅ Allowed      |
+
+All dependencies are **compatible with commercial use**, subject to license compliance.
+
+---
+
 ## 🧰 How to compile and run the example
 
 The `example/` folder contains a Flutter demo.
