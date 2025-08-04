@@ -1,0 +1,49 @@
+# Dart & Flutter
+.dart_tool/
+.packages
+.pub-cache/
+build/
+*.lock
+
+# IDEs
+.idea/
+.vscode/
+*.iml
+
+# Output della compilazione
+example/build/
+example/.dart_tool/
+example/.idea/
+example/.packages
+example/pubspec.lock
+
+# Piattaforme native generate nell'example
+example/android/.gradle/
+example/android/.idea/
+example/android/local.properties
+example/ios/Flutter/
+example/ios/.symlinks/
+example/ios/Pods/
+example/ios/.generated/
+example/macos/Flutter/
+example/macos/Pods/
+example/web/.dart_tool/
+example/linux/CMakeFiles/
+example/linux/Makefile
+example/windows/CMakeFiles/
+example/windows/Makefile
+example/example.iml
+
+# Xcode specific
+example/ios/Runner.xcworkspace/
+example/ios/Runner.xcodeproj/project.xcworkspace/
+DerivedData/
+
+# Android specific
+example/android/.gradle/
+example/android/app/build/
+
+# Others
+example/.flutter-plugins
+example/.flutter-plugins-dependencies
+example/.metadata
