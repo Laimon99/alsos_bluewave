@@ -1,6 +1,5 @@
 import 'dart:async';
-import 'package:alsos_bluewave/src/ble/ble_adapter.dart';
-import 'package:alsos_bluewave/src/ble/ble_connection.dart';
+import 'package:alsos_bluewave/alsos_bluewave.dart';
 import 'package:alsos_bluewave/src/factory_calibration/factory_calibration.pb.dart';
 import 'package:alsos_bluewave/src/models/acquisitions/acquisitions.dart';
 import 'package:alsos_bluewave/src/models/acquisitions/acquisitions_info.dart';
@@ -27,17 +26,36 @@ class BlueWaveDevice {
 
   BlueWaveDevice._internal(this.id);
 
-  /// Connects to a BlueWave device using the provided BleAdapter and device ID.
-  /// This method creates a new instance and establishes a GATT connection,
-  /// resolving the required characteristics.
-  static Future<BlueWaveDevice> connect(BleAdapter adapter, String id) async {
+  // BLE scan wrapper
+  static Future<void> startScan() => BleScanner.instance.startScan();
+  static Future<void> stopScan() => BleScanner.instance.stopScan();
+
+  /// Returns a stream of discovered devices as simple maps.
+  static Stream<List<Map<String, dynamic>>> get scanResults =>
+      BleScanner.instance.results.map((devices) {
+        return devices.map((d) {
+          final f = d.advertising?.toFriendlyMap();
+          return {
+            'id': d.id,
+            'name': d.name,
+            'manufacturer': d.advertising?.manufacturer,
+            'status': f?['status'],
+            'measurements': f?['measurements'],
+          };
+        }).toList();
+      });
+
+  /// Connects to a BlueWave device using its ID only.
+  /// Automatically uses BleAdapter.instance internally.
+  static Future<BlueWaveDevice> connect(String id) async {
+    final adapter = BleAdapter.instance;
     final device = BlueWaveDevice._internal(id);
 
     try {
       // Establish BLE connection
       device._conn = await adapter.connect(id);
 
-      // Resolve characteristics and assign them to internal fields
+      // Resolve characteristics and assign them
       await resolveGattCharacteristics(device._conn, assign: (uuidMap) {
         device._sysInfoChar = uuidMap['sysInfo']!;
         device._charManufacturer = uuidMap['manufacturer']!;
@@ -56,6 +74,15 @@ class BlueWaveDevice {
 
   /// Disconnects the device.
   Future<void> disconnect() => _conn.disconnect();
+
+  /// Disconnects a list of BlueWaveDevice instances.
+  static Future<void> disconnectAll(List<BlueWaveDevice> devices) async {
+    for (final d in devices) {
+      try {
+        await d.disconnect();
+      } catch (_) {}
+    }
+  }
 
   /// Reads system metadata.
   Future<SystemInfo> readSystemInfo() async {

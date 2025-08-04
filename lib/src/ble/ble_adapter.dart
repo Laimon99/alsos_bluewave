@@ -66,16 +66,6 @@ class BleAdapter {
     return conn;
   }
 
-  /// Disconnect all active connections.
-  Future<void> disconnectAll() async {
-    for (final conn in List.of(_connections)) {
-      try {
-        await conn.disconnect();
-      } catch (_) {}
-    }
-    _connections.clear();
-  }
-
   Future<bool> _checkPermissions() async {
     final statuses = await [
       Permission.bluetoothScan,
