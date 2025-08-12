@@ -48,7 +48,7 @@ class _DownloadResultsPageState extends State<DownloadResultsPage> {
           await Future.delayed(const Duration(seconds: 10));
         }
 
-        final blob = await dev.toMissionBlob();
+        final blob = await dev.getMissionBlob();
 
         setState(() => _blobs.add(blob));
         _appendLog('Download completed for $name');
