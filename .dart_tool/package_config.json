@@ -26,6 +26,42 @@
       "languageVersion": "3.4"
     },
     {
+      "name": "bluetooth_low_energy",
+      "rootUri": "file:///C:/Users/simon/AppData/Local/Pub/Cache/hosted/pub.dev/bluetooth_low_energy-6.1.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.7"
+    },
+    {
+      "name": "bluetooth_low_energy_android",
+      "rootUri": "file:///C:/Users/simon/AppData/Local/Pub/Cache/hosted/pub.dev/bluetooth_low_energy_android-6.1.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.7"
+    },
+    {
+      "name": "bluetooth_low_energy_darwin",
+      "rootUri": "file:///C:/Users/simon/AppData/Local/Pub/Cache/hosted/pub.dev/bluetooth_low_energy_darwin-6.1.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.7"
+    },
+    {
+      "name": "bluetooth_low_energy_linux",
+      "rootUri": "file:///C:/Users/simon/AppData/Local/Pub/Cache/hosted/pub.dev/bluetooth_low_energy_linux-6.1.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.7"
+    },
+    {
+      "name": "bluetooth_low_energy_platform_interface",
+      "rootUri": "file:///C:/Users/simon/AppData/Local/Pub/Cache/hosted/pub.dev/bluetooth_low_energy_platform_interface-6.1.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.7"
+    },
+    {
+      "name": "bluetooth_low_energy_windows",
+      "rootUri": "file:///C:/Users/simon/AppData/Local/Pub/Cache/hosted/pub.dev/bluetooth_low_energy_windows-6.1.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.7"
+    },
+    {
       "name": "bluez",
       "rootUri": "file:///C:/Users/simon/AppData/Local/Pub/Cache/hosted/pub.dev/bluez-0.8.3",
       "packageUri": "lib/",
@@ -80,6 +116,18 @@
       "languageVersion": "2.17"
     },
     {
+      "name": "device_info_plus",
+      "rootUri": "file:///C:/Users/simon/AppData/Local/Pub/Cache/hosted/pub.dev/device_info_plus-11.5.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.7"
+    },
+    {
+      "name": "device_info_plus_platform_interface",
+      "rootUri": "file:///C:/Users/simon/AppData/Local/Pub/Cache/hosted/pub.dev/device_info_plus_platform_interface-7.0.3",
+      "packageUri": "lib/",
+      "languageVersion": "3.7"
+    },
+    {
       "name": "ffi",
       "rootUri": "file:///C:/Users/simon/AppData/Local/Pub/Cache/hosted/pub.dev/ffi-2.1.4",
       "packageUri": "lib/",
@@ -102,42 +150,6 @@
       "rootUri": "file:///C:/flutter/packages/flutter",
       "packageUri": "lib/",
       "languageVersion": "3.7"
-    },
-    {
-      "name": "flutter_blue_plus",
-      "rootUri": "file:///C:/Users/simon/AppData/Local/Pub/Cache/hosted/pub.dev/flutter_blue_plus-1.35.5",
-      "packageUri": "lib/",
-      "languageVersion": "3.0"
-    },
-    {
-      "name": "flutter_blue_plus_android",
-      "rootUri": "file:///C:/Users/simon/AppData/Local/Pub/Cache/hosted/pub.dev/flutter_blue_plus_android-4.0.5",
-      "packageUri": "lib/",
-      "languageVersion": "3.0"
-    },
-    {
-      "name": "flutter_blue_plus_darwin",
-      "rootUri": "file:///C:/Users/simon/AppData/Local/Pub/Cache/hosted/pub.dev/flutter_blue_plus_darwin-4.0.1",
-      "packageUri": "lib/",
-      "languageVersion": "3.0"
-    },
-    {
-      "name": "flutter_blue_plus_linux",
-      "rootUri": "file:///C:/Users/simon/AppData/Local/Pub/Cache/hosted/pub.dev/flutter_blue_plus_linux-3.0.2",
-      "packageUri": "lib/",
-      "languageVersion": "3.0"
-    },
-    {
-      "name": "flutter_blue_plus_platform_interface",
-      "rootUri": "file:///C:/Users/simon/AppData/Local/Pub/Cache/hosted/pub.dev/flutter_blue_plus_platform_interface-4.0.2",
-      "packageUri": "lib/",
-      "languageVersion": "3.0"
-    },
-    {
-      "name": "flutter_blue_plus_web",
-      "rootUri": "file:///C:/Users/simon/AppData/Local/Pub/Cache/hosted/pub.dev/flutter_blue_plus_web-3.0.1",
-      "packageUri": "lib/",
-      "languageVersion": "3.3"
     },
     {
       "name": "flutter_web_plugins",
@@ -168,6 +180,12 @@
       "rootUri": "file:///C:/Users/simon/AppData/Local/Pub/Cache/hosted/pub.dev/http_parser-4.1.2",
       "packageUri": "lib/",
       "languageVersion": "3.4"
+    },
+    {
+      "name": "hybrid_logging",
+      "rootUri": "file:///C:/Users/simon/AppData/Local/Pub/Cache/hosted/pub.dev/hybrid_logging-1.0.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.0"
     },
     {
       "name": "io",
@@ -300,12 +318,6 @@
       "rootUri": "file:///C:/Users/simon/AppData/Local/Pub/Cache/hosted/pub.dev/pub_semver-2.2.0",
       "packageUri": "lib/",
       "languageVersion": "3.4"
-    },
-    {
-      "name": "rxdart",
-      "rootUri": "file:///C:/Users/simon/AppData/Local/Pub/Cache/hosted/pub.dev/rxdart-0.28.0",
-      "packageUri": "lib/",
-      "languageVersion": "2.12"
     },
     {
       "name": "shelf",
@@ -444,6 +456,18 @@
       "rootUri": "file:///C:/Users/simon/AppData/Local/Pub/Cache/hosted/pub.dev/webkit_inspection_protocol-1.2.1",
       "packageUri": "lib/",
       "languageVersion": "3.0"
+    },
+    {
+      "name": "win32",
+      "rootUri": "file:///C:/Users/simon/AppData/Local/Pub/Cache/hosted/pub.dev/win32-5.14.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.8"
+    },
+    {
+      "name": "win32_registry",
+      "rootUri": "file:///C:/Users/simon/AppData/Local/Pub/Cache/hosted/pub.dev/win32_registry-2.1.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.7"
     },
     {
       "name": "xml",

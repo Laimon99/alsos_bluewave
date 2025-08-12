@@ -70,6 +70,7 @@ class _DownloadResultsPageState extends State<DownloadResultsPage> {
   @override
   void dispose() {
     BlueWaveDevice.disconnectAll(_connectedDevices);
+    BlueWaveDevice.stopScan();
     super.dispose();
   }
 

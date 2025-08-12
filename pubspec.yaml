@@ -1,14 +1,14 @@
 name: alsos_bluewave
 description: Pure-Dart BlueWave protocol & models
 version: 0.1.0
-publish_to: none          # ← repo privato
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
 
 dependencies:
-  collection: ^1.19.1     # se serve, altrimenti rimuovi
-  flutter_blue_plus: ^1.35.5
+  bluetooth_low_energy: ^6.1.0
+  collection: ^1.19.1
+  device_info_plus: ^11.5.0
   permission_handler: ^12.0.1
   protobuf: ^4.1.0
 

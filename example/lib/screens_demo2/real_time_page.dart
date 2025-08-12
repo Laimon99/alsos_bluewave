@@ -32,7 +32,7 @@ class _RealTimePageState extends State<RealTimePage> {
 
   @override
   void dispose() {
-    BlueWaveDevice.stopScan(); // opzionale ma buona pratica
+    BlueWaveDevice.stopScan();
     super.dispose();
   }
 

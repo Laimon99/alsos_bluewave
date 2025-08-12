@@ -20,7 +20,7 @@ class _StartScanPageState extends State<StartScanPage> {
 
   @override
   void dispose() {
-    BlueWaveDevice.stopScan(); // opzionale ma pulito
+    BlueWaveDevice.stopScan();
     super.dispose();
   }
 

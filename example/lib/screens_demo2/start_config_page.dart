@@ -78,6 +78,7 @@ class _StartConfigPageState extends State<StartConfigPage> {
   @override
   void dispose() {
     BlueWaveDevice.disconnectAll(_connectedDevices);
+    BlueWaveDevice.stopScan();
     super.dispose();
   }
 

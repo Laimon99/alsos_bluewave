@@ -1,76 +1,122 @@
 import 'dart:async';
-import 'package:alsos_bluewave/src/ble/ble_connection.dart';
-import 'package:alsos_bluewave/src/ble/ble_device.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart' as fbp;
+import 'dart:io' show Platform;
+import 'package:bluetooth_low_energy/bluetooth_low_energy.dart';
+import 'package:collection/collection.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-/// BLE adapter for scanning and connecting to devices.
+import 'ble_device.dart';
+import 'ble_connection.dart';
+
 class BleAdapter {
   static final BleAdapter instance = BleAdapter._();
   BleAdapter._();
 
   final List<BleConnection> _connections = [];
 
-  /// Scan for nearby BLE devices.
-  Stream<List<BleDevice>> scan(
-      {Duration timeout = const Duration(seconds: 5)}) {
+  Stream<List<BleDevice>> scan({Duration timeout = const Duration(seconds: 5)}) {
     final controller = StreamController<List<BleDevice>>.broadcast();
-    final found = <String, BleDevice>{};
+    final found = <UUID, BleDevice>{};
     _startScan(controller, found, timeout);
     return controller.stream;
   }
 
   Future<void> _startScan(
     StreamController<List<BleDevice>> controller,
-    Map<String, BleDevice> found,
+    Map<UUID, BleDevice> found,
     Duration timeout,
   ) async {
-    if (!await _checkPermissions()) {
+    if (!await _ensurePermissions()) {
       controller.addError('BLE permissions denied');
       await controller.close();
       return;
     }
 
-    await fbp.FlutterBluePlus.startScan(timeout: timeout);
-    final sub = fbp.FlutterBluePlus.scanResults.listen((batch) {
-      for (final r in batch) {
-        final id = r.device.remoteId.str;
-        if (found.containsKey(id)) continue;
+    final manager = CentralManager();
+    final state = await manager.state;
+    if (state != BluetoothLowEnergyState.poweredOn) {
+      controller.addError('Bluetooth is not powered on');
+      await controller.close();
+      return;
+    }
 
-        found[id] = BleDevice(
-          id: id,
-          name: r.device.platformName,
-          rssi: r.rssi,
-        );
-        controller.add(found.values.toList(growable: false));
-      }
+    final sub = manager.discovered.listen((event) {
+      final peripheral = event.peripheral;
+      final id = peripheral.uuid;
+      if (found.containsKey(id)) return;
+
+      final name = event.advertisement.name ?? 'Unknown';
+      final rssi = event.rssi;
+
+      found[id] = BleDevice(
+        id: id.toString(),
+        name: name,
+        rssi: rssi,
+      );
+      controller.add(found.values.toList(growable: false));
     });
 
+    await manager.startDiscovery();
     await Future.delayed(timeout);
-    await fbp.FlutterBluePlus.stopScan();
+    await manager.stopDiscovery();
     await sub.cancel();
     await controller.close();
   }
 
-  /// Connect to device by ID.
   Future<BleConnection> connect(String deviceId,
       {Duration timeout = const Duration(seconds: 20)}) async {
-    final dev = fbp.BluetoothDevice.fromId(deviceId);
-    try {
-      await dev.connect(autoConnect: false, timeout: timeout);
-    } catch (e) {
-      throw Exception('Connection error with $deviceId: $e');
+    final manager = CentralManager();
+    final peripherals = await manager.retrieveConnectedPeripherals();
+    Peripheral? peripheral = peripherals.firstWhereOrNull(
+      (p) => p.uuid.toString() == deviceId,
+    );
+
+    if (peripheral == null) {
+      final discoveries = <DiscoveredEventArgs>[];
+      final sub = manager.discovered.listen(discoveries.add);
+      await manager.startDiscovery();
+      await Future.delayed(timeout);
+      await manager.stopDiscovery();
+      await sub.cancel();
+
+      peripheral = discoveries
+          .map((e) => e.peripheral)
+          .firstWhereOrNull((p) => p.uuid.toString() == deviceId);
+
+      if (peripheral == null) {
+        throw Exception('Peripheral $deviceId not found');
+      }
     }
-    final conn = BleConnection(dev);
+
+    await manager.connect(peripheral);
+    final conn = BleConnection(peripheral);
     _connections.add(conn);
     return conn;
   }
 
-  Future<bool> _checkPermissions() async {
+  Future<bool> _ensurePermissions() async {
+    if (!Platform.isAndroid) return true;
+
+    final androidInfo = await DeviceInfoPlugin().androidInfo;
+    final sdkInt = androidInfo.version.sdkInt;
+
+    if (sdkInt >= 31) {
+      final statuses = await [
+        Permission.bluetoothScan,
+        Permission.bluetoothConnect,
+      ].request();
+      return statuses.values.every((s) => s.isGranted);
+    }
+
+    final locationStatus = await Permission.locationWhenInUse.request();
+    if (!locationStatus.isGranted) {
+      print('⚠️ Location permission not granted.');
+      return false;
+    }
+
     final statuses = await [
       Permission.bluetoothScan,
       Permission.bluetoothConnect,
-      Permission.locationWhenInUse,
     ].request();
     return statuses.values.every((s) => s.isGranted);
   }
