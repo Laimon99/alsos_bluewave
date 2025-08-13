@@ -15,7 +15,7 @@ class SystemInfo {
   final String mac;
   final String description;
   final int batteryTotal; // In Coulombs
-  final int batteryUsed;  // In Coulombs
+  final int batteryUsed; // In Coulombs
   final String resetReason; // Human-readable reset reason
   final int resetCount;
 
@@ -44,7 +44,7 @@ class SystemInfo {
   factory SystemInfo.fromBytes(List<int> bytes) {
     final d = ByteData.sublistView(Uint8List.fromList(bytes));
 
-    int u16(int o) => d.getUint16(o, Endian.little);  
+    int u16(int o) => d.getUint16(o, Endian.little);
     int u32(int o) => d.getUint32(o, Endian.little);
 
     String _decodeFirmware(int v) =>
@@ -112,6 +112,50 @@ class SystemInfo {
     }
   }
 
+  Map<String, dynamic> toMap() {
+    final modelKey = model.toUpperCase().startsWith('BLUEWAVE-')
+        ? model
+            .substring('BlueWave-'.length)
+            .toUpperCase() // es. "BlueWave-TP" -> "TP"
+        : model.toUpperCase();
+
+    return {
+      // Identità / modello
+      'model': model, // es. "BlueWave-TP"
+      'modelKey': modelKey, // es. "TP"
+      'serial': serial, // alias di mac
+      'mac': mac,
+
+      // Versione / firmware
+      'firmware': firmware, // es. "01.31"
+      'version': firmware, // alias
+      'versionString': firmware, // alias
+
+      // Testi
+      'description': description,
+
+      // Tempi
+      'epoch': epoch.toUtc().toIso8601String(),
+      'epochSecondsSince2000': epoch.difference(DateTime.utc(2000)).inSeconds,
+      'uptimeSeconds': uptime.inSeconds,
+
+      // Memorie
+      'flashSize': flashSize,
+      'e2romSize': e2romSize,
+
+      // Acquisizioni / batteria / reset
+      'totalAcq': totalAcq,
+      'batteryMv': batteryMv,
+      'batteryTotal': batteryTotal,
+      'batteryUsed': batteryUsed,
+      'resetReason': resetReason,
+      'resetCount': resetCount,
+    };
+  }
+
+  /// Alias per compatibilità con serializer JSON.
+  Map<String, dynamic> toJson() => toMap();
+
   @override
   bool operator ==(Object o) =>
       o is SystemInfo &&
@@ -148,4 +192,3 @@ class SystemInfo {
         resetCount,
       );
 }
-

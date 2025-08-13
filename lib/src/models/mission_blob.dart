@@ -1,66 +1,85 @@
-// 📁 lib/models/blob_builder.dart
-import 'package:alsos_bluewave/src/models/system_info.dart';
-import 'package:alsos_bluewave/src/controllers/bluewave_device.dart';
+import 'dart:math' as math;
 
-/// Utility class to build a Mission BLOB from a connected BlueWaveDevice.
+import 'package:alsos_bluewave/alsos_bluewave.dart';
+import 'package:alsos_bluewave/src/models/acquisitions/acquisitions_info.dart';
+
 class MissionBlobBuilder {
   final BlueWaveDevice device;
-
   MissionBlobBuilder(this.device);
 
-  /// Generates the Mission BLOB in structured Map format.
-  Future<Map<String, dynamic>> build() async {
-    final sys = await device.readSystemInfo();
-    final info = await device.readDeviceInformation();
-    final acquisition = await device.downloadAcquisitions();
+  Future<Map<String, dynamic>> build(AcquisitionInfo acquisition) async {
+    final status = await device.readDeviceStatus();
 
-    final model = info['model'].toString().toUpperCase();
-    final config = acquisition.userConfiguration;
+    // Cast sicuro: accetta Map<dynamic,dynamic> e la trasforma in Map<String,dynamic>
+    final Map<String, dynamic>? sys =
+        (status['sys'] as Map?)?.cast<String, dynamic>() ??
+        (status['systemInfo'] as Map?)?.cast<String, dynamic>();
 
-    final sensors = <Map<String, dynamic>>[];
-    if (model.startsWith('TP') || model.startsWith('TT') || model.startsWith('T-')) {
-      sensors.add(_sensorEntry(sys, model, config.description, channel: '0'));
-    }
-    if (model.startsWith('TP') || model.startsWith('TT') || model.startsWith('P-')) {
-      sensors.add(_sensorEntry(sys, model, config.description, channel: '1'));
-    }
-
-    final devices = [
-      {
-        "brand": info['manufacturer'],
-        "model": info['model'],
-        "serial": sys.serial,
-        "certificate": "",
-        "type": "LOGGER",
-        "description": info['hwRev'],
-        "version": sys.versionString,
-        "sensors": sensors,
-      }
-    ];
-
+    // --- misure ---
     final timestamps = <int>[];
-    final measuresMap = <String, Map<String, dynamic>>{};
-
-    for (final sample in acquisition.parsed.samples) {
-      final ts = (sample.timestamp.millisecondsSinceEpoch ~/ 1000) - 946684800;
+    final measuresMap = <String, Map<String, dynamic>>{}; // forma "vecchia"
+    for (final s in acquisition.parsed.samples) {
+      final ts = (s.timestamp.millisecondsSinceEpoch ~/ 1000) - 946684800;
       timestamps.add(ts);
-      _addMeasure(measuresMap, "TEMPERATURE", "CALIBRATED", "°C", sample.temperatureC);
-      _addMeasure(measuresMap, "PRESSURE", "CALIBRATED", "mBar", sample.pressuremBar);
+
+      _addMeasure(measuresMap, "TEMPERATURE", "CALIBRATED", "°C",   s.temperatureC);
+      _addMeasure(measuresMap, "PRESSURE",    "CALIBRATED", "mbar", s.pressuremBar);
     }
 
     final filteredMeasures = measuresMap.values.where((m) {
-      final values = m["Values"] as List<num>;
+      final values = (m["Values"] as List<num>? ) ?? const <num>[];
       return values.any((v) => v != 0);
     }).toList();
 
     final measures = <Map<String, dynamic>>[
-      {
-        "type": "TIMESTAMP",
-        "mode": "UTC",
-        "unit": "s",
-        "Values": timestamps,
-      },
+      {"type": "TIMESTAMP", "mode": "UTC", "unit": "s", "Values": timestamps},
       ...filteredMeasures,
+    ];
+
+    // --- dispositivi ---
+    String _kindFromModels() {
+      final candidates = <String>[
+        (sys?['model'] ?? '').toString(),
+        (status['model'] ?? '').toString(),
+        (sys?['modelKey'] ?? '').toString(),
+      ].map((s) => s.toUpperCase());
+
+      final s = candidates.firstWhere((e) => e.isNotEmpty, orElse: () => '');
+      if (s.contains('TP')) return 'TP';
+      if (s.contains('TT')) return 'TT';
+      if (s.contains('TRH')) return 'TRH';
+      if (s.contains(RegExp(r'\bP\b')) || s.endsWith('-P')) return 'P';
+      return 'T';
+    }
+
+    final kind = _kindFromModels();
+    final deviceModel =
+        status['model']?.toString().isNotEmpty == true
+            ? status['model']
+            : (sys?['model'] ?? sys?['modelKey'] ?? 'BlueWave');
+
+    final devices = [
+      {
+        "brand": status['manufacturer'] ?? 'BlueWave',
+        "model": deviceModel,
+        "serial": sys?['serial'] ?? sys?['mac'] ?? '',
+        "type": "LOGGER",
+        "version": sys?['versionString'] ?? sys?['firmware'] ?? '',
+        "sensors": () {
+          final list = <Map<String, dynamic>>[];
+          final desc = acquisition.userConfiguration.description ?? '';
+
+          // CH0 per T / TP / TT
+          if (kind == 'T' || kind.startsWith('TP') || kind.startsWith('TT')) {
+            list.add(_sensorEntry(sys, kind, desc, channel: '0'));
+          }
+          // CH1 per P / TP / TT
+          if (kind == 'P' || kind.startsWith('TP') || kind.startsWith('TT')) {
+            list.add(_sensorEntry(sys, kind, desc, channel: '1'));
+          }
+          return list;
+        }(),
+      }
     ];
 
     return {
@@ -71,20 +90,45 @@ class MissionBlobBuilder {
     };
   }
 
-  Map<String, dynamic> _sensorEntry(SystemInfo sys, String model, String description, {required String channel}) {
+  Map<String, dynamic> _sensorEntry(
+    Map<String, dynamic>? sys,
+    String modelKey,
+    String description, {
+    required String channel,
+  }) {
     return {
       "brand": "BlueWave",
-      "model": model,
-      "serial": sys.serial,
-      "certificate": "",
-      "version": sys.versionString,
+      "model": modelKey, // es. "TP"
+      "serial": sys?['serial'] ?? sys?['mac'] ?? '',
+      "version": sys?['versionString'] ?? sys?['firmware'] ?? '',
       "channel": channel,
       "description": description,
     };
   }
 
-  void _addMeasure(Map<String, Map<String, dynamic>> map, String type, String mode, String unit, num? value) {
+  // ===== forma "vecchia": chiave unica + Values =====
+  void _addMeasure(
+    Map<String, Map<String, dynamic>> map,
+    String type,
+    String mode,
+    String unit,
+    num? value,
+  ) {
     if (value == null || value.isNaN || value.isInfinite) return;
+
+    num formatted = value;
+    final u = unit.toLowerCase();
+
+    if (unit == "°C") {
+      final v = value.toDouble();
+      final truncated3 = (v * 1000).truncateToDouble() / 1000.0;   // taglio al 3°
+      formatted = double.parse(truncated3.toStringAsFixed(2));     // arrotondo a 2
+    } else if (u == "mbar") {
+      final v = value.toDouble();
+      final truncated1 = (v * 10).truncateToDouble() / 10.0;       // taglio al 1°
+      formatted = truncated1.round();                              // intero
+    }
+
     final key = "$type|$mode|$unit";
     map.putIfAbsent(key, () => {
       "type": type,
@@ -92,6 +136,6 @@ class MissionBlobBuilder {
       "unit": unit,
       "Values": <num>[],
     });
-    map[key]!["Values"].add(value);
+    (map[key]!["Values"] as List<num>).add(formatted);
   }
 }

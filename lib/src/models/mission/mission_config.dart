@@ -9,7 +9,10 @@ class MissionSetupPacket {
 
   // Optional decoded user-friendly fields
   final Duration? delay, frequency, duration;
-  final DateTime? missionStartTime, currentDeviceTime, nextAcquisitionTime, stopTime;
+  final DateTime? missionStartTime,
+      currentDeviceTime,
+      nextAcquisitionTime,
+      stopTime;
   final String? status;
   final List<String>? decodedOptions;
 
@@ -35,7 +38,6 @@ class MissionSetupPacket {
     this.status,
     this.decodedOptions,
   });
-
 
   /// Encodes this packet into 33 bytes.
   Uint8List toBytes() {
@@ -71,8 +73,14 @@ class MissionSetupPacket {
     required Duration frequency,
     required Duration duration,
     int? flags,
-    required bool enableCh0,
-    required bool enableCh1,
+    // nuovi parametri dettagliati sui canali
+    bool ch0Raw = false,
+    bool ch0Factory = false,
+    bool ch0User = false,
+    bool ch1Raw = false,
+    bool ch1Factory = false,
+    bool ch1User = false,
+    // parametri già esistenti
     required int checkPeriod,
     required int checkTrigger,
     int? advRate,
@@ -80,17 +88,16 @@ class MissionSetupPacket {
     final epoch = DateTime.now().millisecondsSinceEpoch ~/ 1000 - 946684800;
     final start = delay.inSeconds;
     final period = frequency.inSeconds;
-    final stop = duration.inSeconds == 0 ? 0xFFFFFFFF : start + duration.inSeconds;
+    final stop =
+        duration.inSeconds == 0 ? 0xFFFFFFFF : start + duration.inSeconds;
 
     int options = 0x0000;
-    if (enableCh0) {
-      options |= 0x0001; // CH0_RAW
-      options |= 0x0020; // CH0_USER
-    }
-    if (enableCh1) {
-      options |= 0x0002; // CH1_RAW
-      options |= 0x0080; // CH1_USER
-    }
+    if (ch0Raw) options |= 0x0001; // CH0_RAW
+    if (ch1Raw) options |= 0x0002; // CH1_RAW
+    if (ch0Factory) options |= 0x0010;
+    if (ch0User) options |= 0x0020;
+    if (ch1Factory) options |= 0x0040;
+    if (ch1User) options |= 0x0080;
 
     return MissionSetupPacket(
       start: start,
@@ -111,8 +118,6 @@ class MissionSetupPacket {
   String toString() {
     return 'MissionSetupPacket(start=$start, period=$period, stop=$stop, epoch=$epoch, status=$status)';
   }
-
-
 
 //EXTRA FUNCTION
 

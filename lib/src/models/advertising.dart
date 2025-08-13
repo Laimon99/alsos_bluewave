@@ -24,7 +24,7 @@ class Advertising {
   final int options;
   final DateTime when;
   final double batteryLevel;
-  final Map<String, double> measurements;
+  final Map<String, double> measurements; // raw float32 dal payload
   final String id;
 
   Advertising._({
@@ -36,7 +36,6 @@ class Advertising {
     required this.measurements,
   });
 
-  /// Creates a fallback Advertising with no data (for devices without 0xFF field).
   factory Advertising.minimal(String id) {
     return Advertising._(
       id: id,
@@ -48,15 +47,12 @@ class Advertising {
     );
   }
 
-  /// Builds an Advertising object from raw bytes (starting after type 0xFF).
   static Advertising? fromBytes(String id, List<int> bytes) {
     final raw = Uint8List.fromList(bytes);
-    if (raw.length < 11)
-      return null; // min length: 2 (prefix) + 2 (flags) + 2 (opts) + 4 (ts) + 1 (battery)
+    if (raw.length < 11) return null;
 
     final d = ByteData.sublistView(raw);
 
-// Skip the first 2 bytes (manufacturer header)
     const headerOffset = 2;
     final flags = d.getUint16(headerOffset, Endian.little);
     final options = d.getUint16(headerOffset + 2, Endian.little);
@@ -93,7 +89,39 @@ class Advertising {
     );
   }
 
-  /// Returns a textual status string based on flags.
+  // ---------- formattazione misure ----------
+  static double _fmtCelsius(double v) {
+    // taglio al 3° decimale, poi arrotondo a 2
+    final t3 = (v * 1000).truncateToDouble() / 1000.0;
+    return double.parse(t3.toStringAsFixed(2));
+  }
+
+  static int _fmtMbarInt(double v) {
+    // taglio al 1° decimale, poi arrotondo a intero
+    final t1 = (v * 10).truncateToDouble() / 10.0;
+    return t1.round();
+  }
+
+  /// Valori normalizzati secondo le regole richieste.
+  /// CH0_* -> temperatura (°C, 2 decimali), CH1_* -> pressione (mbar, intero)
+  Map<String, num> get normalizedMeasurements {
+    final out = <String, num>{};
+    measurements.forEach((k, v) {
+      if (v.isNaN || v.isInfinite) {
+        // lascio NaN come double per coerenza
+        out[k] = double.nan;
+      } else if (k.startsWith('CH0_')) {
+        out[k] = _fmtCelsius(v);
+      } else if (k.startsWith('CH1_')) {
+        out[k] = _fmtMbarInt(v);
+      } else {
+        out[k] = v;
+      }
+    });
+    return out;
+  }
+  // ------------------------------------------
+
   static String _decodeFlags(int flags) {
     final status = flags & 0xE000;
     final isStarted = (status & 0x8000) != 0;
@@ -111,7 +139,6 @@ class Advertising {
     return 'STOPPED';
   }
 
-  /// Maps option bits to channel labels.
   static List<String> _decodeChannels(int opt) {
     const map = {
       0x0010: 'CH0_FACTORY',
@@ -129,18 +156,30 @@ class Advertising {
         .toList();
   }
 
-  /// Status string.
   String get status => _decodeFlags(flags);
 
-  /// Converts to user-friendly summary.
   Map<String, dynamic> toFriendlyMap() {
     final String batteryStr =
         batteryLevel.isNaN ? '—' : '${(batteryLevel * 100).round()}%';
     final String timeStr = when.toLocal().toIso8601String().substring(11, 19);
-    final String measures = measurements.entries.map((e) {
+
+    final String measures = normalizedMeasurements.entries.map((e) {
       final label = _prettyLabel(e.key);
-      final value = e.value.isNaN ? '—' : e.value.toStringAsFixed(2);
-      return '$label=$value';
+      final val = e.value;
+      // °C con 2 decimali, mbar intero
+      if (label == 'Temperature') {
+        if (val.isFinite) {
+          return '$label=${(val).toStringAsFixed(2)}°C';
+        }
+        return '$label=—';
+      } else if (label == 'Pressure') {
+        if (val.isFinite) {
+          return '$label=${val.toInt()} mbar';
+        }
+        return '$label=—';
+      }
+      // fallback
+      return '$label=${val.isFinite ? val.toString() : '—'}';
     }).join(' | ');
 
     return {
@@ -153,7 +192,6 @@ class Advertising {
     };
   }
 
-  /// Pretty labels for channels (can be customized).
   static String _prettyLabel(String key) {
     switch (key) {
       case 'CH0_FACTORY':
@@ -167,7 +205,6 @@ class Advertising {
     }
   }
 
-  /// Manufacturer from UUID suffix.
   String get manufacturer {
     final macPart = id.substring(id.length - 12).toLowerCase();
     final oui =
