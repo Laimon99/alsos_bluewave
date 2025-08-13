@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:alsos_bluewave/alsos_bluewave.dart';
 import 'package:alsos_bluewave/src/models/acquisitions/acquisitions_info.dart';
 
